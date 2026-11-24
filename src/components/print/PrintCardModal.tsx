@@ -12,6 +12,7 @@ interface PrintCardModalProps {
   simulation: RaceSimulationSummary;
   onCopyWhatsApp: () => void;
   copiedWa: boolean;
+  embedded?: boolean;
 }
 
 export function PrintCardModal({
@@ -21,28 +22,33 @@ export function PrintCardModal({
   simulation,
   onCopyWhatsApp,
   copiedWa,
+  embedded = false,
 }: PrintCardModalProps) {
   const [format, setFormat] = useState<"wrist" | "pocket">("wrist");
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, embedded, onClose]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#161E19]/55 p-4"
-      role="dialog"
-      aria-modal="true"
+      className={
+        embedded
+          ? "flex w-full items-center justify-center"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-[#161E19]/55 p-4"
+      }
+      role={embedded ? undefined : "dialog"}
+      aria-modal={embedded ? undefined : "true"}
       aria-labelledby="print-modal-title"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (!embedded && e.target === e.currentTarget) onClose();
       }}
     >
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#E2E5E2] bg-white shadow-xl">
