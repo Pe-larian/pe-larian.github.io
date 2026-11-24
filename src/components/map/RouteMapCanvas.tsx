@@ -65,68 +65,113 @@ function buildRouteGeoJson(points: TrackPoint[]) {
   };
 }
 
-function buildRasterStyle(layer: MapLayerId) {
-  const tileConfig =
-    layer === "topo"
-      ? {
-          tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
-          attribution: "Map data: OpenStreetMap contributors, SRTM | Style: OpenTopoMap",
-          maxzoom: 17,
-        }
-      : layer === "satellite"
-        ? {
-            tiles: [
-              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            ],
-            attribution: "Imagery: Esri World Imagery",
-            maxzoom: 18,
-          }
-        : {
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            attribution: "OpenStreetMap contributors",
-            maxzoom: 19,
-          };
-
-  const sources: Record<string, unknown> = {
-    basemap: {
-      type: "raster",
-      tiles: tileConfig.tiles,
-      tileSize: 256,
-      attribution: tileConfig.attribution,
-      maxzoom: tileConfig.maxzoom,
-    },
+/**
+ * Single persistent MapLibre style containing all basemap layers and the race-route GeoJSON layer.
+ * Switching basemaps only toggles layer visibility so the uploaded GPX route line is never wiped.
+ */
+function buildPersistentMapStyle(
+  initialLayer: MapLayerId,
+  initialRouteData: ReturnType<typeof buildRouteGeoJson>
+) {
+  const vis = (id: MapLayerId) => {
+    if (id === "osm") {
+      return initialLayer === "osm" || initialLayer === "terrain3d" ? "visible" : "none";
+    }
+    return initialLayer === id ? "visible" : "none";
   };
-
-  if (layer === "terrain3d") {
-    sources.terrarium = {
-      type: "raster-dem",
-      tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-      encoding: "terrarium",
-      tileSize: 256,
-      maxzoom: 15,
-    };
-  }
 
   return {
     version: 8 as const,
-    sources,
+    sources: {
+      osm: {
+        type: "raster" as const,
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "OpenStreetMap contributors",
+        maxzoom: 19,
+      },
+      topo: {
+        type: "raster" as const,
+        tiles: ["https://tile.opentopomap.org/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        attribution: "OpenStreetMap contributors | OpenTopoMap",
+        maxzoom: 17,
+      },
+      satellite: {
+        type: "raster" as const,
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "Esri World Imagery",
+        maxzoom: 18,
+      },
+      terrarium: {
+        type: "raster-dem" as const,
+        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+        encoding: "terrarium" as const,
+        tileSize: 256,
+        maxzoom: 15,
+      },
+      "race-route": {
+        type: "geojson" as const,
+        data: initialRouteData,
+      },
+    },
     layers: [
       {
-        id: "basemap-layer",
+        id: "basemap-osm",
         type: "raster" as const,
-        source: "basemap",
+        source: "osm",
+        layout: { visibility: vis("osm") },
         minzoom: 0,
         maxzoom: 22,
       },
+      {
+        id: "basemap-topo",
+        type: "raster" as const,
+        source: "topo",
+        layout: { visibility: vis("topo") },
+        minzoom: 0,
+        maxzoom: 22,
+      },
+      {
+        id: "basemap-satellite",
+        type: "raster" as const,
+        source: "satellite",
+        layout: { visibility: vis("satellite") },
+        minzoom: 0,
+        maxzoom: 22,
+      },
+      {
+        id: "race-route-casing",
+        type: "line" as const,
+        source: "race-route",
+        layout: {
+          "line-join": "round" as const,
+          "line-cap": "round" as const,
+        },
+        paint: {
+          "line-color": "#FFFFFF",
+          "line-width": 7,
+          "line-opacity": 0.92,
+        },
+      },
+      {
+        id: "race-route-line",
+        type: "line" as const,
+        source: "race-route",
+        layout: {
+          "line-join": "round" as const,
+          "line-cap": "round" as const,
+        },
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 4.4,
+          "line-opacity": 0.98,
+        },
+      },
     ],
-    ...(layer === "terrain3d"
-      ? {
-          terrain: {
-            source: "terrarium",
-            exaggeration: 1.35,
-          },
-        }
-      : {}),
   };
 }
 
@@ -165,53 +210,8 @@ export function RouteMapCanvas({
   onAddCpRef.current = onAddCheckpointAtLatLon;
 
   const routeGeoJson = useMemo(() => buildRouteGeoJson(points), [points]);
-
-  const syncRouteLayers = (map: MapLibreMap, data: ReturnType<typeof buildRouteGeoJson>) => {
-    if (!map.isStyleLoaded()) return;
-
-    const existing = map.getSource("race-route") as
-      | { setData?: (d: unknown) => void }
-      | undefined;
-
-    if (existing && typeof existing.setData === "function") {
-      existing.setData(data);
-    } else {
-      map.addSource("race-route", {
-        type: "geojson",
-        data,
-      } as unknown as Parameters<MapLibreMap["addSource"]>[1]);
-
-      map.addLayer({
-        id: "race-route-casing",
-        type: "line",
-        source: "race-route",
-        layout: {
-          "line-join": "round",
-          "line-cap": "round",
-        },
-        paint: {
-          "line-color": "#FFFFFF",
-          "line-width": 7,
-          "line-opacity": 0.9,
-        },
-      });
-
-      map.addLayer({
-        id: "race-route-line",
-        type: "line",
-        source: "race-route",
-        layout: {
-          "line-join": "round",
-          "line-cap": "round",
-        },
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": 4.2,
-          "line-opacity": 0.96,
-        },
-      });
-    }
-  };
+  const latestGeoJsonRef = useRef(routeGeoJson);
+  latestGeoJsonRef.current = routeGeoJson;
 
   const fitRouteBounds = (map: MapLibreMap, pts: TrackPoint[]) => {
     if (pts.length < 2) return;
@@ -233,15 +233,15 @@ export function RouteMapCanvas({
       ],
       {
         padding: isDesktop
-          ? { top: 72, right: 80, bottom: 96, left: 460 }
+          ? { top: 72, right: 84, bottom: 96, left: 480 }
           : { top: 48, right: 40, bottom: 48, left: 40 },
         duration: 600,
-        maxZoom: 14.5,
+        maxZoom: 15,
       }
     );
   };
 
-  // Initialize MapLibre once on mount
+  // Initialize MapLibre once on mount with persistent style
   useEffect(() => {
     let cancelled = false;
 
@@ -254,7 +254,10 @@ export function RouteMapCanvas({
 
         const map = new mod.Map({
           container: containerRef.current,
-          style: buildRasterStyle(activeLayer) as unknown as import("maplibre-gl").StyleSpecification,
+          style: buildPersistentMapStyle(
+            activeLayer,
+            latestGeoJsonRef.current
+          ) as unknown as import("maplibre-gl").StyleSpecification,
           center: [116.46, -8.38],
           zoom: 11,
           attributionControl: { compact: true },
@@ -265,7 +268,10 @@ export function RouteMapCanvas({
         map.on("load", () => {
           if (cancelled) return;
           setMapReady(true);
-          syncRouteLayers(map, buildRouteGeoJson(points));
+          const source = map.getSource("race-route") as
+            | { setData?: (d: unknown) => void }
+            | undefined;
+          source?.setData?.(latestGeoJsonRef.current);
           if (points.length >= 2) {
             fitRouteBounds(map, points);
           }
@@ -298,36 +304,44 @@ export function RouteMapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Switch basemap layer cleanly and re-attach route GeoJSON
+  // Switch basemap visibility cleanly without wiping the GPX route source
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
-    map.setStyle(buildRasterStyle(activeLayer) as unknown as import("maplibre-gl").StyleSpecification);
-    const onStyleLoad = () => {
-      syncRouteLayers(map, routeGeoJson);
-      if (activeLayer === "terrain3d") {
-        map.easeTo({ pitch: 52, duration: 500 });
-        setIsTilted3D(true);
-      } else {
-        map.easeTo({ pitch: 0, duration: 400 });
-        setIsTilted3D(false);
-      }
-    };
-    map.once("style.load", onStyleLoad);
-  }, [activeLayer, mapReady, routeGeoJson]);
+    const osmVis = activeLayer === "osm" || activeLayer === "terrain3d" ? "visible" : "none";
+    const topoVis = activeLayer === "topo" ? "visible" : "none";
+    const satVis = activeLayer === "satellite" ? "visible" : "none";
 
-  // Update GeoJSON source whenever points change
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapReady) return;
-    if (map.isStyleLoaded()) {
-      syncRouteLayers(map, routeGeoJson);
+    if (map.getLayer("basemap-osm")) map.setLayoutProperty("basemap-osm", "visibility", osmVis);
+    if (map.getLayer("basemap-topo")) map.setLayoutProperty("basemap-topo", "visibility", topoVis);
+    if (map.getLayer("basemap-satellite")) {
+      map.setLayoutProperty("basemap-satellite", "visibility", satVis);
     }
+
+    if (activeLayer === "terrain3d") {
+      map.setTerrain({ source: "terrarium", exaggeration: 1.35 });
+      map.easeTo({ pitch: 52, duration: 500 });
+      setIsTilted3D(true);
+    } else {
+      map.setTerrain(null);
+      map.easeTo({ pitch: 0, duration: 400 });
+      setIsTilted3D(false);
+    }
+  }, [activeLayer, mapReady]);
+
+  // Always update GeoJSON route line whenever points change (never gated on tile loading)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const source = map.getSource("race-route") as
+      | { setData?: (d: unknown) => void }
+      | undefined;
+    source?.setData?.(routeGeoJson);
   }, [routeGeoJson, mapReady]);
 
-  // Fit bounds when route changes length significantly (new upload/sample)
-  const routeKey = `${points.length}-${points[0]?.lat.toFixed(4)}-${points[points.length - 1]?.lon.toFixed(4)}`;
+  // Fit bounds when route changes (new upload or sample switch)
+  const routeKey = `${points.length}-${points[0]?.lat.toFixed(5)}-${points[points.length - 1]?.lon.toFixed(5)}`;
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || points.length < 2) return;
@@ -427,10 +441,10 @@ export function RouteMapCanvas({
       ],
       {
         padding: isDesktop
-          ? { top: 90, right: 90, bottom: 110, left: 470 }
+          ? { top: 90, right: 90, bottom: 110, left: 490 }
           : { top: 50, right: 40, bottom: 50, left: 40 },
         duration: 550,
-        maxZoom: 14.5,
+        maxZoom: 15,
       }
     );
   }, [focusedSegmentIndex, checkpoints, mapReady]);
@@ -466,13 +480,13 @@ export function RouteMapCanvas({
       <div ref={containerRef} className="h-full w-full" />
 
       {mapError && (
-        <div className="absolute inset-x-4 top-20 z-20 mx-auto max-w-md rounded-xl border border-[#E2E5E2] bg-white p-4 text-sm text-[#161E19] shadow-md lg:left-[440px] lg:right-auto">
+        <div className="absolute inset-x-4 top-20 z-20 mx-auto max-w-md rounded-xl border border-[#E2E5E2] bg-white p-4 text-sm text-[#161E19] shadow-md lg:left-[480px] lg:right-auto">
           <p className="font-semibold">Mode Ringan Tanpa WebGL</p>
           <p className="mt-1 text-xs text-[#525C56]">{mapError}</p>
         </div>
       )}
 
-      {/* Top-right floating layer switcher (zero top navbar) */}
+      {/* Top-right floating layer switcher */}
       <div
         className="no-print absolute right-3 top-3 z-20 flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-sm"
         role="group"
@@ -486,7 +500,7 @@ export function RouteMapCanvas({
               type="button"
               onClick={() => onChangeLayer(opt.id)}
               aria-pressed={active}
-              className={`min-h-[36px] rounded-full px-3 text-xs font-semibold transition-colors ${
+              className={`min-h-[36px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
                 active
                   ? "bg-[#1B2B22] text-white"
                   : "text-[#161E19] hover:bg-[#F5F5F3]"
@@ -543,68 +557,72 @@ export function RouteMapCanvas({
         </button>
       </div>
 
-      {/* Step 2 floating GPX editor toolbar over bottom map canvas */}
+      {/* Step 2 single-line full-width floating GPX editor toolbar */}
       {step === 2 && (
-        <div className="no-print absolute bottom-4 left-1/2 z-20 hidden -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#E2E5E2] bg-white/95 px-2.5 py-1.5 shadow-md lg:left-[calc(50%+200px)] lg:flex">
-          <button
-            type="button"
-            onClick={onToggleAddCpMode}
-            aria-pressed={addCpMode}
-            className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors ${
-              addCpMode
-                ? "bg-[#1E6B3A] text-white"
-                : "text-[#161E19] hover:bg-[#F5F5F3]"
-            }`}
-          >
-            <IconPin size={14} />
-            {addCpMode ? "Klik rute di peta..." : "Tambah CP di Peta"}
-          </button>
+        <div className="no-print absolute bottom-4 left-[476px] right-16 z-20 hidden justify-center lg:flex">
+          <div className="flex w-max max-w-full items-center gap-1.5 overflow-x-auto whitespace-nowrap rounded-full border border-[#E2E5E2] bg-white/95 px-3 py-1.5 shadow-md">
+            <button
+              type="button"
+              onClick={onToggleAddCpMode}
+              aria-pressed={addCpMode}
+              className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
+                addCpMode
+                  ? "bg-[#1E6B3A] text-white"
+                  : "text-[#161E19] hover:bg-[#F5F5F3]"
+              }`}
+            >
+              <IconPin size={14} />
+              {addCpMode ? "Klik rute di peta..." : "Tambah CP di Peta"}
+            </button>
 
-          <span className="h-5 w-px bg-[#E2E5E2]" aria-hidden="true" />
+            <span className="h-5 w-px shrink-0 bg-[#E2E5E2]" aria-hidden="true" />
 
-          <button
-            type="button"
-            onClick={onCleanSpikes}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
-          >
-            Rapikan spike
-            {spikesDetected > 0 && (
-              <span className="font-num rounded-full bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
-                {spikesDetected}
-              </span>
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={onCleanSpikes}
+              title="Hapus titik GPS atau elevasi yang tiba-tiba melompat tidak wajar"
+              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
+            >
+              Hapus titik loncat
+              {spikesDetected > 0 && (
+                <span className="font-num rounded-full bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
+                  {spikesDetected}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={onCalibrateDem}
-            disabled={demLoading}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-50"
-          >
-            <IconMountain size={14} />
-            {demLoading ? "Kalibrasi..." : "Kalibrasi DEM"}
-          </button>
+            <button
+              type="button"
+              onClick={onCalibrateDem}
+              disabled={demLoading}
+              title="Sesuaikan ketinggian rute dengan data peta satelit agar hitungan tanjakan lebih akurat"
+              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-50"
+            >
+              <IconMountain size={14} />
+              {demLoading ? "Memperbaiki..." : "Perbaiki elevasi"}
+            </button>
 
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-40"
-          >
-            <IconUndo size={14} />
-            Undo
-          </button>
+            <button
+              type="button"
+              onClick={onUndo}
+              disabled={!canUndo}
+              className="inline-flex min-h-[36px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-40"
+            >
+              <IconUndo size={14} />
+              Undo
+            </button>
 
-          <span className="h-5 w-px bg-[#E2E5E2]" aria-hidden="true" />
+            <span className="h-5 w-px shrink-0 bg-[#E2E5E2]" aria-hidden="true" />
 
-          <button
-            type="button"
-            onClick={onExportGpx}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-[#1B2B22] px-3.5 text-xs font-semibold text-white hover:bg-[#161E19]"
-          >
-            <IconDownload size={14} />
-            Export .gpx
-          </button>
+            <button
+              type="button"
+              onClick={onExportGpx}
+              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#1B2B22] px-3.5 text-xs font-semibold text-white hover:bg-[#161E19]"
+            >
+              <IconDownload size={14} />
+              Export .gpx
+            </button>
+          </div>
         </div>
       )}
 

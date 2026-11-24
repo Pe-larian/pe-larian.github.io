@@ -74,6 +74,8 @@ export interface RunnerProfile {
   sweatSodiumCategory: SweatSodiumCategory;
   customSweatSodiumMgPerL?: number;
   caffeineStrategy: boolean;
+  targetFinishTimeSec?: number;
+  roadSplitPct: number; // -10 (negative split) .. 0 (even) .. +10 (positive split)
 }
 
 export interface GpxCleaningStats {
@@ -146,10 +148,14 @@ export interface SegmentSimulation {
   weather: SegmentWeatherSnapshot;
   carbsG: number;
   fluidMl: number;
+  mandatoryCarryWaterMl: number;
   sodiumMg: number;
   caffeineMg: number;
   caloriesKcal: number;
   carryWeightKg: number;
+  gelsCount: number;
+  fastCarbG: number;
+  solidFoodCarbG: number;
   packSummary: string;
   pacingNote: string;
 }
@@ -167,6 +173,7 @@ export interface FuelingSafetyChecks {
 
 export interface RaceSimulationSummary {
   totalDistanceM: number;
+  equivalentDistanceKm: number;
   totalGainM: number;
   totalLossM: number;
   minEleM: number;
@@ -185,6 +192,15 @@ export interface RaceSimulationSummary {
   totalCaffeineMg: number;
   totalCaloriesBurnKcal: number;
   totalCaloriesIntakeKcal: number;
+  preRaceCarbsMinG: number;
+  preRaceCarbsMaxG: number;
+  feedingIntervalMin: number;
+  totalFeedingSessions: number;
+  carbsPerSessionG: number;
+  totalGelsCount: number;
+  trailSolidRatioActive: boolean;
+  fastCarbTotalG: number;
+  solidFoodTotalG: number;
   slopeDistribution: {
     flatPct: number;
     climbPct: number;

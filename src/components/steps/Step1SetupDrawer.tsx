@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconAlert, IconArrowRight, IconCheck, IconMinus, IconPlus, IconUpload } from "@/components/Icons";
-import type { RaceDiscipline, RaceMetadata, TimezoneCode } from "@/lib/race-engine/types";
+import type { RaceDiscipline, RaceMetadata } from "@/lib/race-engine/types";
 
 interface Step1SetupDrawerProps {
   metadata: RaceMetadata;
@@ -16,6 +16,12 @@ interface Step1SetupDrawerProps {
   onUploadGpxFile: (file: File) => void;
   onLoadSampleRoute: (discipline: RaceDiscipline) => void;
   onNextStep: () => void;
+}
+
+function timezoneNoticeLabel(tz: RaceMetadata["timezone"]): string {
+  if (tz === "WIB") return "WIB (UTC+7)";
+  if (tz === "WIT") return "WIT (UTC+9)";
+  return "WITA (UTC+8)";
 }
 
 export function Step1SetupDrawer({
@@ -33,6 +39,22 @@ export function Step1SetupDrawer({
 }: Step1SetupDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [weightDraft, setWeightDraft] = useState(String(weightKg));
+
+  useEffect(() => {
+    setWeightDraft(String(weightKg));
+  }, [weightKg]);
+
+  const commitWeightDraft = (raw: string) => {
+    const parsed = Number(raw);
+    if (!raw.trim() || !Number.isFinite(parsed)) {
+      setWeightDraft(String(weightKg));
+      return;
+    }
+    const clamped = Math.max(35, Math.min(150, Math.round(parsed)));
+    onChangeWeightKg(clamped);
+    setWeightDraft(String(clamped));
+  };
 
   const handleFileChange = (files: FileList | null) => {
     const file = files?.[0];
@@ -79,7 +101,7 @@ export function Step1SetupDrawer({
 
         {/* Race Name + Discipline Toggle */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <label
               htmlFor="race-name"
               className="text-xs font-semibold text-[#161E19]"
@@ -87,7 +109,7 @@ export function Step1SetupDrawer({
               Nama race & kategori
             </label>
             <div
-              className="inline-flex rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-0.5"
+              className="inline-flex shrink-0 rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-0.5"
               role="group"
               aria-label="Kategori race"
             >
@@ -121,63 +143,66 @@ export function Step1SetupDrawer({
           />
         </div>
 
-        {/* Date, Start Time, Timezone */}
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
-          <div className="sm:col-span-5">
-            <label
-              htmlFor="race-date"
-              className="mb-1 block text-xs font-semibold text-[#161E19]"
-            >
-              Tanggal race
-            </label>
-            <input
-              id="race-date"
-              type="date"
-              value={metadata.raceDate}
-              onChange={(e) => onUpdateMetadata({ raceDate: e.target.value })}
-              className="font-num min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-sm text-[#161E19]"
-            />
+        {/* Date, Start Time, Auto-Detected Timezone (disabled notification) */}
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
+            <div className="sm:col-span-5">
+              <label
+                htmlFor="race-date"
+                className="mb-1 block text-xs font-semibold text-[#161E19]"
+              >
+                Tanggal race
+              </label>
+              <input
+                id="race-date"
+                type="date"
+                value={metadata.raceDate}
+                onChange={(e) => onUpdateMetadata({ raceDate: e.target.value })}
+                className="font-num min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-sm text-[#161E19]"
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <label
+                htmlFor="start-time"
+                className="mb-1 block text-xs font-semibold text-[#161E19]"
+              >
+                Jam start
+              </label>
+              <input
+                id="start-time"
+                type="time"
+                value={metadata.startTime}
+                onChange={(e) => onUpdateMetadata({ startTime: e.target.value })}
+                className="font-num min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-2 text-sm text-[#161E19]"
+              />
+            </div>
+            <div className="sm:col-span-4">
+              <label
+                htmlFor="race-tz-auto"
+                className="mb-1 block text-xs font-semibold text-[#161E19]"
+              >
+                Zona waktu
+              </label>
+              <input
+                id="race-tz-auto"
+                type="text"
+                disabled
+                readOnly
+                value={timezoneNoticeLabel(metadata.timezone)}
+                aria-label="Zona waktu otomatis berdasarkan lokasi rute"
+                className="font-num min-h-[44px] w-full rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] px-2.5 text-center text-xs font-semibold text-[#525C56]"
+              />
+            </div>
           </div>
-          <div className="sm:col-span-4">
-            <label
-              htmlFor="start-time"
-              className="mb-1 block text-xs font-semibold text-[#161E19]"
-            >
-              Jam start
-            </label>
-            <input
-              id="start-time"
-              type="time"
-              value={metadata.startTime}
-              onChange={(e) => onUpdateMetadata({ startTime: e.target.value })}
-              className="font-num min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-sm text-[#161E19]"
-            />
-          </div>
-          <div className="sm:col-span-3">
-            <label
-              htmlFor="race-tz"
-              className="mb-1 block text-xs font-semibold text-[#161E19]"
-            >
-              Zona
-            </label>
-            <select
-              id="race-tz"
-              value={metadata.timezone}
-              onChange={(e) =>
-                onUpdateMetadata({ timezone: e.target.value as TimezoneCode })
-              }
-              className="min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-2 text-sm font-medium text-[#161E19]"
-            >
-              <option value="WIB">WIB</option>
-              <option value="WITA">WITA</option>
-              <option value="WIT">WIT</option>
-            </select>
-          </div>
+          <p className="text-[11px] text-[#525C56]">
+            Zona waktu terdeteksi otomatis dari lokasi GPX:{" "}
+            <strong className="text-[#161E19]">{timezoneNoticeLabel(metadata.timezone)}</strong>
+          </p>
         </div>
 
-        {/* Weight Stepper */}
+        {/* Weight Stepper (Keyboard-friendly) */}
         <div>
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between gap-2">
             <label
               htmlFor="runner-weight"
               className="text-xs font-semibold text-[#161E19]"
@@ -185,13 +210,17 @@ export function Step1SetupDrawer({
               Berat badan (kg)
             </label>
             <span className="text-[11px] text-[#525C56]">
-              Dasar hitung kalori & hidrasi
+              Dasar hitung hidrasi & kalori
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => onChangeWeightKg(Math.max(38, weightKg - 1))}
+              onClick={() => {
+                const next = Math.max(35, weightKg - 1);
+                onChangeWeightKg(next);
+                setWeightDraft(String(next));
+              }}
               aria-label="Kurangi berat badan 1 kg"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#8C948E] bg-white text-[#161E19] hover:bg-[#F5F5F3]"
             >
@@ -199,21 +228,35 @@ export function Step1SetupDrawer({
             </button>
             <input
               id="runner-weight"
-              type="number"
-              min={38}
-              max={140}
-              value={weightKg}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={weightDraft}
               onChange={(e) => {
-                const v = Number(e.target.value);
-                if (Number.isFinite(v)) {
-                  onChangeWeightKg(Math.max(38, Math.min(140, Math.round(v))));
+                const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                setWeightDraft(cleaned);
+                if (cleaned !== "") {
+                  const num = Number(cleaned);
+                  if (Number.isFinite(num) && num >= 35 && num <= 150) {
+                    onChangeWeightKg(num);
+                  }
+                }
+              }}
+              onBlur={() => commitWeightDraft(weightDraft)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  commitWeightDraft(weightDraft);
                 }
               }}
               className="font-num min-h-[44px] w-full rounded-lg border border-[#8C948E] bg-white px-3 text-center text-base font-bold text-[#161E19]"
             />
             <button
               type="button"
-              onClick={() => onChangeWeightKg(Math.min(140, weightKg + 1))}
+              onClick={() => {
+                const next = Math.min(150, weightKg + 1);
+                onChangeWeightKg(next);
+                setWeightDraft(String(next));
+              }}
               aria-label="Tambah berat badan 1 kg"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#8C948E] bg-white text-[#161E19] hover:bg-[#F5F5F3]"
             >
@@ -267,14 +310,13 @@ export function Step1SetupDrawer({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
+                className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
               >
                 <IconUpload size={15} />
                 Pilih GPX
               </button>
             </div>
 
-            {/* Active loaded GPX indicator */}
             {pointCount > 0 && (
               <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-[#E2E5E2] bg-white px-3 py-2 text-xs">
                 <div className="flex min-w-0 items-center gap-2">
@@ -294,20 +336,19 @@ export function Step1SetupDrawer({
               </div>
             )}
 
-            {/* Quick Sample GPX loaders */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] font-medium text-[#525C56]">Coba contoh:</span>
               <button
                 type="button"
                 onClick={() => onLoadSampleRoute("trail")}
-                className="min-h-[32px] rounded-md border border-[#E2E5E2] bg-white px-2.5 text-[11px] font-semibold text-[#1E6B3A] hover:bg-[#EAF6F0]"
+                className="min-h-[32px] whitespace-nowrap rounded-md border border-[#E2E5E2] bg-white px-2.5 text-[11px] font-semibold text-[#1E6B3A] hover:bg-[#EAF6F0]"
               >
                 Sample GPX Trail (Rinjani)
               </button>
               <button
                 type="button"
                 onClick={() => onLoadSampleRoute("road")}
-                className="min-h-[32px] rounded-md border border-[#E2E5E2] bg-white px-2.5 text-[11px] font-semibold text-[#1E6B3A] hover:bg-[#EAF6F0]"
+                className="min-h-[32px] whitespace-nowrap rounded-md border border-[#E2E5E2] bg-white px-2.5 text-[11px] font-semibold text-[#1E6B3A] hover:bg-[#EAF6F0]"
               >
                 Sample GPX Road (Jakarta)
               </button>
