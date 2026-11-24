@@ -110,6 +110,15 @@ export function timezoneToOffsetHours(tz: "WIB" | "WITA" | "WIT"): number {
 }
 
 /**
+ * Auto-detect Indonesian timezone (WIB/WITA/WIT) from route start longitude.
+ */
+export function detectIndonesianTimezone(lon: number): "WIB" | "WITA" | "WIT" {
+  if (!Number.isFinite(lon) || lon < 114.5) return "WIB";
+  if (lon <= 129.0) return "WITA";
+  return "WIT";
+}
+
+/**
  * Deterministic tropical climate fallback used when race date is beyond Open-Meteo's 16-day forecast window
  * or when offline. Always tagged honestly as source: "climate-estimate".
  */

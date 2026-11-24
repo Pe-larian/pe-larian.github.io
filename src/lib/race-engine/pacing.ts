@@ -1,4 +1,9 @@
-import { computeSegmentFueling, evaluateFuelingSafety } from "./fueling";
+import {
+  computeFeedingSchedule,
+  computePreRaceCarbs,
+  computeSegmentFueling,
+  evaluateFuelingSafety,
+} from "./fueling";
 import type {
   Checkpoint,
   RaceMetadata,
@@ -130,6 +135,13 @@ function buildPacingNote(
   return notes.join(" · ");
 }
 
+export function computeEquivalentDistanceKm(
+  distanceKm: number,
+  gainM: number
+): number {
+  return Number((Math.max(0, distanceKm) + Math.max(0, gainM) / 100).toFixed(1));
+}
+
 export function simulateRace(
   points: TrackPoint[],
   checkpoints: Checkpoint[],
@@ -178,11 +190,13 @@ export function simulateRace(
   const climbPct = Math.round((climbDist / totalDistAll) * 100);
   const steepPct = Math.max(0, 100 - flatPct - climbPct);
 
+  const totalDistanceM = points.length > 0 ? points[points.length - 1].distFromStartM : 0;
+  const equivalentDistanceKm = computeEquivalentDistanceKm(totalDistanceM / 1000, totalGainM);
+
   // Effort factor: 85% effort => threshold pace * (85/effort)
   const effortMultiplier = 85 / Math.max(55, Math.min(100, profile.targetEffortPct));
   const baseFlatPaceSecPerKm = profile.flatThresholdPaceSecPerKm * effortMultiplier;
 
-  // Pass 1: estimate pacing & moving times per segment
   interface RawLeg {
     index: number;
     fromCp: Checkpoint;
@@ -251,23 +265,19 @@ export function simulateRace(
     const terrain = fromCp.terrainAfter;
     const terrainFactor = TERRAIN_FACTORS[terrain] ?? 1.15;
 
-    // Altitude penalty above 2,000 m (~3.5% per 500m)
     const altitudeFactor = midEleM > 2000 ? 1 + ((midEleM - 2000) / 500) * 0.035 : 1.0;
 
-    // Fatigue drift past 3 hours (~1.6% slower per hour)
     const priorHours = cumulativeElapsedSec / 3600;
     const fatigueFactor =
       profile.fatigueDriftEnabled && priorHours > 3
         ? 1 + Math.min(0.22, (priorHours - 3) * 0.016)
         : 1.0;
 
-    // Sample weather near segment midpoint
     const approxMidHour =
       (startClockSec + cumulativeElapsedSec + (legDistM / 1000) * baseFlatPaceSecPerKm * 0.5) /
       3600;
     const weather = sampleWeatherForSegment(forecast, approxMidHour, midEleM);
 
-    // Heat pace penalty above 26 C Heat Index
     const heatPaceFactor =
       weather.heatIndexC > 26 ? 1 + Math.min(0.12, (weather.heatIndexC - 26) * 0.008) : 1.0;
 
@@ -284,18 +294,6 @@ export function simulateRace(
     const stopSec = i === orderedCps.length - 2 ? 0 : toCp.plannedStopSec;
     const arrivalElapsedSec = cumulativeElapsedSec + movingSec;
     const departureElapsedSec = arrivalElapsedSec + stopSec;
-
-    // Night ratio calculation based on solar sunset / sunrise
-    const legStartMin = ((startClockSec + cumulativeElapsedSec) / 60) % 1440;
-    const legEndMin = legStartMin + movingSec / 60;
-    let nightOverlapMin = 0;
-    if (legStartMin < solar.sunriseMin) {
-      nightOverlapMin += Math.max(0, Math.min(legEndMin, solar.sunriseMin) - legStartMin);
-    }
-    if (legEndMin > solar.sunsetMin) {
-      nightOverlapMin += Math.max(0, legEndMin - Math.max(legStartMin, solar.sunsetMin));
-    }
-    const nightRatio = Math.max(0, Math.min(1, nightOverlapMin / Math.max(1, movingSec / 60)));
 
     const avgGradePct = Number((((toCp.ele - fromCp.ele) / legDistM) * 100).toFixed(1));
 
@@ -315,14 +313,76 @@ export function simulateRace(
       midEleM,
       arrivalElapsedSec,
       departureElapsedSec,
-      nightRatio,
+      nightRatio: 0,
       weather,
     });
 
     cumulativeElapsedSec = departureElapsedSec;
   }
 
-  const totalRaceHours = Math.max(0.25, cumulativeElapsedSec / 3600);
+  // Apply Road split strategy (negative split: faster 2nd half; positive split: faster 1st half)
+  if (metadata.discipline === "road" && rawLegs.length > 1 && profile.roadSplitPct !== 0) {
+    const splitDec = Math.max(-0.15, Math.min(0.15, profile.roadSplitPct / 100));
+    const baseMovingTotal = rawLegs.reduce((acc, l) => acc + l.movingSec, 0);
+    const totalLegDist = Math.max(1, rawLegs.reduce((acc, l) => acc + l.distanceM, 0));
+    let accDist = 0;
+
+    for (const leg of rawLegs) {
+      const midProgress = (accDist + leg.distanceM * 0.5) / totalLegDist; // 0..1
+      // splitDec < 0 => early legs slower (1 + |splitDec|/2), late legs faster (1 - |splitDec|/2)
+      const splitMult = 1 + (midProgress - 0.5) * splitDec;
+      leg.movingSec = Math.max(30, Math.round(leg.movingSec * splitMult));
+      accDist += leg.distanceM;
+    }
+
+    const newMovingTotal = rawLegs.reduce((acc, l) => acc + l.movingSec, 0);
+    if (newMovingTotal > 0 && baseMovingTotal > 0) {
+      const norm = baseMovingTotal / newMovingTotal;
+      for (const leg of rawLegs) {
+        leg.movingSec = Math.max(30, Math.round(leg.movingSec * norm));
+      }
+    }
+  }
+
+  // Scale proportionally if user set an explicit targetFinishTimeSec via slider
+  const baseMovingSum = rawLegs.reduce((acc, l) => acc + l.movingSec, 0);
+  const totalStopSum = rawLegs.reduce((acc, l) => acc + l.stopSec, 0);
+  if (
+    profile.targetFinishTimeSec !== undefined &&
+    profile.targetFinishTimeSec > totalStopSum + 60 &&
+    baseMovingSum > 0
+  ) {
+    const targetMovingSum = profile.targetFinishTimeSec - totalStopSum;
+    const scale = targetMovingSum / baseMovingSum;
+    for (const leg of rawLegs) {
+      leg.movingSec = Math.max(20, Math.round(leg.movingSec * scale));
+    }
+  }
+
+  // Recompute cumulative arrival/departure times, night ratio, and segment weather after scaling
+  let elapsedCursor = 0;
+  for (const leg of rawLegs) {
+    leg.arrivalElapsedSec = elapsedCursor + leg.movingSec;
+    leg.departureElapsedSec = leg.arrivalElapsedSec + leg.stopSec;
+
+    const midHour = (startClockSec + elapsedCursor + leg.movingSec * 0.5) / 3600;
+    leg.weather = sampleWeatherForSegment(forecast, midHour, leg.midEleM);
+
+    const legStartMin = ((startClockSec + elapsedCursor) / 60) % 1440;
+    const legEndMin = legStartMin + leg.movingSec / 60;
+    let nightOverlapMin = 0;
+    if (legStartMin < solar.sunriseMin) {
+      nightOverlapMin += Math.max(0, Math.min(legEndMin, solar.sunriseMin) - legStartMin);
+    }
+    if (legEndMin > solar.sunsetMin) {
+      nightOverlapMin += Math.max(0, legEndMin - Math.max(legStartMin, solar.sunsetMin));
+    }
+    leg.nightRatio = Math.max(0, Math.min(1, nightOverlapMin / Math.max(1, leg.movingSec / 60)));
+
+    elapsedCursor = leg.departureElapsedSec;
+  }
+
+  const totalRaceHours = Math.max(0.25, elapsedCursor / 3600);
 
   // Pass 2: compute science-based fueling per segment
   let totalCarbsG = 0;
@@ -333,6 +393,8 @@ export function simulateRace(
   let totalSweatLossMl = 0;
   let totalMovingSec = 0;
   let totalStopSec = 0;
+  let fastCarbTotalG = 0;
+  let solidFoodTotalG = 0;
 
   const segments: SegmentSimulation[] = rawLegs.map((leg) => {
     const heatMult = computeSweatHeatMultiplier(leg.weather.heatIndexC);
@@ -345,6 +407,7 @@ export function simulateRace(
       totalRaceHours,
       discipline: metadata.discipline,
       profile,
+      segmentTempC: leg.weather.tempC,
       heatMultiplier: heatMult,
     });
 
@@ -356,6 +419,8 @@ export function simulateRace(
     totalSweatLossMl += fuel.sweatLossMl;
     totalMovingSec += leg.movingSec;
     totalStopSec += leg.stopSec;
+    fastCarbTotalG += fuel.fastCarbG;
+    solidFoodTotalG += fuel.solidFoodCarbG;
 
     const cutoffSec = leg.toCp.cutoffElapsedSec;
     let cutoffBufferSec: number | undefined;
@@ -403,10 +468,14 @@ export function simulateRace(
       weather: leg.weather,
       carbsG: fuel.carbsG,
       fluidMl: fuel.fluidMl,
+      mandatoryCarryWaterMl: fuel.mandatoryCarryWaterMl,
       sodiumMg: fuel.sodiumMg,
       caffeineMg: fuel.caffeineMg,
       caloriesKcal: fuel.caloriesKcal,
       carryWeightKg: fuel.carryWeightKg,
+      gelsCount: fuel.gelsCount,
+      fastCarbG: fuel.fastCarbG,
+      solidFoodCarbG: fuel.solidFoodCarbG,
       packSummary: fuel.packSummary,
       pacingNote: buildPacingNote(
         leg.avgGradePct,
@@ -418,7 +487,6 @@ export function simulateRace(
     };
   });
 
-  const totalDistanceM = points.length > 0 ? points[points.length - 1].distFromStartM : 0;
   const totalElapsedSec = totalMovingSec + totalStopSec;
   const distKmTotal = Math.max(0.1, totalDistanceM / 1000);
   const avgPaceSecPerKm = totalMovingSec / distKmTotal;
@@ -439,8 +507,12 @@ export function simulateRace(
     profile,
   });
 
+  const preRace = computePreRaceCarbs(profile.weightKg);
+  const schedule = computeFeedingSchedule(totalRaceHours, totalCarbsG);
+
   return {
     totalDistanceM,
+    equivalentDistanceKm,
     totalGainM: Math.round(totalGainM),
     totalLossM: Math.round(totalLossM),
     minEleM: Number.isFinite(minEleM) ? Math.round(minEleM) : 0,
@@ -459,6 +531,15 @@ export function simulateRace(
     totalCaffeineMg,
     totalCaloriesBurnKcal,
     totalCaloriesIntakeKcal: totalCarbsG * 4,
+    preRaceCarbsMinG: preRace.minG,
+    preRaceCarbsMaxG: preRace.maxG,
+    feedingIntervalMin: schedule.intervalMin,
+    totalFeedingSessions: schedule.sessions,
+    carbsPerSessionG: schedule.carbsPerSessionG,
+    totalGelsCount: schedule.totalGelsCount,
+    trailSolidRatioActive: metadata.discipline === "trail" && totalRaceHours > 3.0 && totalCarbsG > 0,
+    fastCarbTotalG,
+    solidFoodTotalG,
     slopeDistribution: { flatPct, climbPct, steepPct },
     safety,
     segments,

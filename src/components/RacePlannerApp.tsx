@@ -34,7 +34,10 @@ import {
   fetchDemElevations,
   fetchRaceWeatherForecast,
 } from "@/lib/race-engine/openMeteoClient";
-import { buildClimateFallbackForecast } from "@/lib/race-engine/weather";
+import {
+  buildClimateFallbackForecast,
+  detectIndonesianTimezone,
+} from "@/lib/race-engine/weather";
 
 interface UndoSnapshot {
   points: TrackPoint[];
@@ -99,6 +102,7 @@ export function RacePlannerApp() {
     sweatRateLPerHr: 0.9,
     sweatSodiumCategory: "moderate",
     caffeineStrategy: true,
+    roadSplitPct: 0,
   });
 
   const [points, setPoints] = useState<TrackPoint[]>(initialSample.points);
@@ -217,17 +221,22 @@ export function RacePlannerApp() {
 
   const handleLoadSampleRoute = useCallback((discipline: RaceDiscipline) => {
     const sample = buildSampleRoute(discipline);
+    const detectedTz = detectIndonesianTimezone(sample.points[0]?.lon ?? 116.5);
     setPoints(sample.points);
     setCheckpoints(sample.checkpoints);
     setCleaningStats(sample.cleaningStats);
     setUndoStack([]);
     setUploadError(null);
     setDemMessage(null);
+    setProfile((prev) => ({
+      ...prev,
+      targetFinishTimeSec: undefined,
+    }));
     setMetadata((prev) => ({
       ...prev,
       discipline,
       raceName: sample.name,
-      timezone: discipline === "road" ? "WIB" : "WITA",
+      timezone: detectedTz,
       isSample: true,
       sourceFileName:
         discipline === "road" ? "jakarta-42k-sample.gpx" : "rinjani-60k-sample.gpx",
@@ -245,14 +254,20 @@ export function RacePlannerApp() {
       try {
         const xmlText = await file.text();
         const parsed = parseGpxXml(xmlText, metadata.discipline);
+        const detectedTz = detectIndonesianTimezone(parsed.points[0]?.lon ?? 106.8);
         setPoints(parsed.points);
         setCheckpoints(parsed.checkpoints);
         setCleaningStats(parsed.cleaningStats);
         setUndoStack([]);
+        setProfile((prev) => ({
+          ...prev,
+          targetFinishTimeSec: undefined,
+        }));
         setMetadata((prev) => ({
           ...prev,
           raceName:
             prev.isSample || !prev.raceName.trim() ? parsed.name : prev.raceName,
+          timezone: detectedTz,
           isSample: false,
           sourceFileName: file.name,
         }));
@@ -395,7 +410,7 @@ export function RacePlannerApp() {
       }));
       setDemMessage({
         type: "ok",
-        text: `Elevasi dikalibrasi dengan Copernicus DEM 90m (+${nextTotals.gainM} m).`,
+        text: `Elevasi rute diperbaiki sesuai data peta satelit (+${nextTotals.gainM} m).`,
       });
     } catch (err) {
       setDemMessage({
@@ -403,7 +418,7 @@ export function RacePlannerApp() {
         text:
           err instanceof Error
             ? err.message
-            : "Kalibrasi DEM gagal. Gunakan elevasi GPX atau coba lagi.",
+            : "Perbaikan elevasi gagal. Gunakan elevasi GPX atau coba lagi.",
       });
     } finally {
       setDemLoading(false);
@@ -565,7 +580,7 @@ export function RacePlannerApp() {
       <aside
         aria-label="Panel simulasi race"
         className={`no-print fixed z-20 flex flex-col overflow-hidden bg-white shadow-[0_8px_28px_rgba(22,30,25,0.14)] ring-1 ring-[#E2E5E2] transition-transform lg:bottom-4 lg:left-4 lg:top-4 lg:rounded-2xl ${
-          step === 3 ? "lg:w-[430px]" : "lg:w-[396px]"
+          step === 3 ? "lg:w-[460px]" : "lg:w-[440px]"
         } ${
           mobileView === "map"
             ? "pointer-events-none translate-y-[110%] lg:pointer-events-auto lg:translate-y-0"
@@ -732,6 +747,7 @@ export function RacePlannerApp() {
 
           {step === 3 && step3Tab === "strategy" && (
             <Step3StrategyTab
+              discipline={metadata.discipline}
               profile={profile}
               simulation={simulation}
               onUpdateProfile={(patch) => setProfile((prev) => ({ ...prev, ...patch }))}

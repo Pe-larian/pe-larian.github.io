@@ -178,24 +178,28 @@ export function Step2ConfirmDrawer({
           onHoverPointIndex={onHoverPointIndex}
         />
 
-        {/* GPX Cleaning & DEM Quick Controls */}
+        {/* GPX Cleaning & Elevation Quick Controls */}
         <div className="rounded-xl border border-[#E2E5E2] bg-[#F5F5F3] p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-[#161E19]">
-              Perbaikan GPX & Elevasi
+              Rapikan Data Rute & Elevasi
             </span>
             <span className="font-num text-[11px] text-[#525C56]">
-              Gain awal +{cleaningStats.rawGainM} m
+              Tanjakan awal +{cleaningStats.rawGainM} m
             </span>
           </div>
+          <p className="mt-1 text-[11px] text-[#525C56]">
+            Bersihkan titik GPS yang melompat atau samakan tinggi jalur dengan peta satelit.
+          </p>
 
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={onCleanSpikes}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
+              title="Hapus titik GPS atau elevasi yang tiba-tiba melompat tidak wajar"
+              className="inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
             >
-              Rapikan spike
+              Hapus titik loncat
               {cleaningStats.spikesDetected > 0 && (
                 <span className="font-num rounded bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
                   {cleaningStats.spikesDetected}
@@ -207,10 +211,11 @@ export function Step2ConfirmDrawer({
               type="button"
               onClick={onCalibrateDem}
               disabled={demLoading}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-50"
+              title="Sesuaikan ketinggian rute dengan data peta satelit agar hitungan tanjakan lebih akurat"
+              className="inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-50"
             >
               <IconMountain size={14} />
-              {demLoading ? "Kalibrasi..." : "Kalibrasi DEM"}
+              {demLoading ? "Memperbaiki..." : "Perbaiki elevasi"}
             </button>
 
             <button
@@ -218,7 +223,7 @@ export function Step2ConfirmDrawer({
               onClick={onUndo}
               disabled={!canUndo}
               aria-label="Batalkan perubahan terakhir"
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-40"
+              className="inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-40"
             >
               <IconUndo size={14} />
               Undo
@@ -227,7 +232,7 @@ export function Step2ConfirmDrawer({
             <button
               type="button"
               onClick={onExportGpx}
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] lg:hidden"
+              className="inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] lg:hidden"
             >
               <IconDownload size={14} />
               Export .gpx
