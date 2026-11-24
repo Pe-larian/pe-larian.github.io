@@ -1,6 +1,6 @@
 # Trail & Road Race Simulator (Map-First Stepper)
 
-Aplikasi web gratis dan tanpa penyimpanan data untuk merencanakan pacing, strategi nutrisi (fueling), serta mengedit rute GPX bagi pelari trail dan road race.
+Aplikasi web statis gratis dan tanpa penyimpanan data untuk merencanakan pacing, strategi nutrisi (fueling), serta mengedit rute GPX bagi pelari trail dan road race. Berjalan 100% di browser dan dapat langsung dihosting di GitHub Pages (`https://byudhistraq.github.io/web/`).
 
 ## Alur Utama (3 Langkah)
 
@@ -12,9 +12,9 @@ Aplikasi web gratis dan tanpa penyimpanan data untuk merencanakan pacing, strate
 
 ## Stack & Layanan Publik Gratis
 
-- **Framework**: Next.js 15 App Router, React 19, TypeScript, Tailwind CSS v4
+- **Framework**: Next.js 15 App Router (`output: "export"` static site), React 19, TypeScript, Tailwind CSS v4
 - **Peta**: MapLibre GL JS dengan layer OpenStreetMap, OpenTopoMap, AWS Terrarium 3D Terrain, dan Esri World Imagery
-- **Cuaca & Elevasi**: Proxy stateless ke Open-Meteo Forecast API dan Open-Meteo Copernicus DEM 90m API (tanpa database, tanpa autentikasi, tanpa penyimpanan file pengguna)
+- **Cuaca & Elevasi**: Akses langsung dari browser ke Open-Meteo Forecast API dan Open-Meteo Copernicus DEM 90m API (CORS aktif, tanpa database, tanpa autentikasi, tanpa penyimpanan file pengguna)
 
 ## Menjalankan Secara Lokal
 
@@ -25,10 +25,10 @@ pnpm dev
 
 Buka `http://localhost:3000` di browser.
 
-## Pengujian & Build
+## Build Static Export (GitHub Pages) & Pengujian
 
 ```bash
 pnpm test
 pnpm typecheck
-pnpm build
+NEXT_PUBLIC_BASE_PATH=/web pnpm build
 ```

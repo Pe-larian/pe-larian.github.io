@@ -11,6 +11,7 @@ import { buildSampleRoute } from "../sampleRoutes";
 import { minettiCostFactor, simulateRace } from "../pacing";
 import { computeTargetCarbRateGPerHr } from "../fueling";
 import { buildClimateFallbackForecast, applyLapseRateC } from "../weather";
+import { fetchDemElevations, fetchRaceWeatherForecast } from "../openMeteoClient";
 import type { RaceMetadata, RunnerProfile } from "../types";
 
 const BASE_PROFILE: RunnerProfile = {
@@ -121,5 +122,25 @@ describe("Science-based fueling & full race simulation", () => {
 
     // Atmospheric lapse rate cools temperature at higher summit altitude
     expect(applyLapseRateC(26, 1156, 3726)).toBeLessThan(12);
+  });
+});
+
+describe("Static client-side Open-Meteo adapter", () => {
+  it("returns honest climate estimate for race dates beyond 16-day forecast window", async () => {
+    const res = await fetchRaceWeatherForecast({
+      lat: -8.3669,
+      lon: 116.5335,
+      baseEleM: 1156,
+      maxEleM: 3726,
+      raceDate: "2027-08-15",
+      timezone: "WITA",
+    });
+    expect(res.source).toBe("climate-estimate");
+    expect(res.hourly.length).toBe(5);
+    expect(res.summitTempC).toBeLessThan(res.startTempC);
+  });
+
+  it("validates DEM coordinate bounds before fetching", async () => {
+    await expect(fetchDemElevations([])).rejects.toThrow(/1 sampai 100/);
   });
 });

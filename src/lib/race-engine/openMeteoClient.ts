@@ -1,4 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import type {
+  HourlyWeatherPoint,
+  TimezoneCode,
+  WeatherForecastResult,
+} from "./types";
 import {
   applyLapseRateC,
   buildClimateFallbackForecast,
@@ -7,59 +11,63 @@ import {
   estimateSolarTimes,
   timezoneToOffsetHours,
   wmoCodeToIndonesian,
-} from "@/lib/race-engine/weather";
-import type { HourlyWeatherPoint, TimezoneCode, WeatherForecastResult } from "@/lib/race-engine/types";
+} from "./weather";
 
-interface CacheEntry {
+interface WeatherCacheEntry {
   expiresAt: number;
   data: WeatherForecastResult;
 }
 
-// Short-lived in-memory cache keyed strictly by rounded public geo grid + date (zero user data stored)
-const WEATHER_CACHE = new Map<string, CacheEntry>();
+const WEATHER_CACHE = new Map<string, WeatherCacheEntry>();
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const lat = Number(searchParams.get("lat"));
-  const lon = Number(searchParams.get("lon"));
-  const baseEleM = Number(searchParams.get("baseEle") ?? "0");
-  const maxEleM = Number(searchParams.get("maxEle") ?? String(baseEleM));
-  const raceDate = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-  const tzParam = (searchParams.get("tz") ?? "WITA") as TimezoneCode;
-  const tz: TimezoneCode = tzParam === "WIB" || tzParam === "WIT" ? tzParam : "WITA";
+export interface FetchWeatherParams {
+  lat: number;
+  lon: number;
+  baseEleM: number;
+  maxEleM: number;
+  raceDate: string;
+  timezone: TimezoneCode;
+}
 
+/**
+ * Fetches hourly race-day weather directly from Open-Meteo's public CORS-enabled API,
+ * adjusting summit/segment temperatures using environmental lapse rate.
+ * Falls back transparently to altitude climate estimates if outside the 16-day window or offline.
+ */
+export async function fetchRaceWeatherForecast({
+  lat,
+  lon,
+  baseEleM,
+  maxEleM,
+  raceDate,
+  timezone,
+}: FetchWeatherParams): Promise<WeatherForecastResult> {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json({ error: "Koordinat lat/lon tidak valid." }, { status: 400 });
+    throw new Error("Koordinat lat/lon tidak valid.");
   }
 
   const gridLat = lat.toFixed(2);
   const gridLon = lon.toFixed(2);
-  const cacheKey = `${gridLat},${gridLon},${Math.round(baseEleM / 50) * 50},${Math.round(maxEleM / 50) * 50},${raceDate},${tz}`;
+  const cacheKey = `${gridLat},${gridLon},${Math.round(baseEleM / 50) * 50},${Math.round(maxEleM / 50) * 50},${raceDate},${timezone}`;
   const cached = WEATHER_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.data, {
-      headers: { "Cache-Control": "public, max-age=900" },
-    });
+    return cached.data;
   }
 
   const now = new Date();
   const target = new Date(`${raceDate}T00:00:00Z`);
   const diffDays = Math.floor((target.getTime() - now.getTime()) / 86400000);
 
-  // Open-Meteo Forecast API covers up to 16 days ahead; beyond that, return honest climate estimate
   if (Number.isNaN(diffDays) || diffDays < -1 || diffDays > 15) {
-    const fallback = buildClimateFallbackForecast(lat, lon, baseEleM, maxEleM, raceDate, tz);
-    return NextResponse.json(fallback, {
-      headers: { "Cache-Control": "public, max-age=900" },
-    });
+    return buildClimateFallbackForecast(lat, lon, baseEleM, maxEleM, raceDate, timezone);
   }
 
   try {
     const tzIana =
-      tz === "WIB"
+      timezone === "WIB"
         ? "Asia/Jakarta"
-        : tz === "WIT"
+        : timezone === "WIT"
           ? "Asia/Jayapura"
           : "Asia/Makassar";
 
@@ -120,7 +128,12 @@ export async function GET(req: NextRequest) {
     );
     const maxRainProbPct = Math.max(...hourly.map((h) => h.rainProbPct));
     const heatIndexC = computeHeatIndexC(middayTempC, avgHumidityPct);
-    const solar = estimateSolarTimes(lat, lon, raceDate, timezoneToOffsetHours(tz));
+    const solar = estimateSolarTimes(
+      lat,
+      lon,
+      raceDate,
+      timezoneToOffsetHours(timezone)
+    );
 
     const payload: WeatherForecastResult = {
       source: "open-meteo",
@@ -131,20 +144,48 @@ export async function GET(req: NextRequest) {
       maxRainProbPct,
       heatIndexC,
       sweatMultiplier: computeSweatHeatMultiplier(heatIndexC),
-      sunsetClock: `${solar.sunsetClock} ${tz}`,
-      sunriseClock: `${solar.sunriseClock} ${tz}`,
+      sunsetClock: `${solar.sunsetClock} ${timezone}`,
+      sunriseClock: `${solar.sunriseClock} ${timezone}`,
       hourly,
       note: "Prakiraan langsung Open-Meteo (disesuaikan lapse rate ketinggian -0,65°C per 100 m).",
     };
 
     WEATHER_CACHE.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, data: payload });
-    return NextResponse.json(payload, {
-      headers: { "Cache-Control": "public, max-age=900" },
-    });
+    return payload;
   } catch {
-    const fallback = buildClimateFallbackForecast(lat, lon, baseEleM, maxEleM, raceDate, tz);
-    return NextResponse.json(fallback, {
-      headers: { "Cache-Control": "public, max-age=300" },
-    });
+    return buildClimateFallbackForecast(lat, lon, baseEleM, maxEleM, raceDate, timezone);
   }
+}
+
+/**
+ * Fetches calibrated Copernicus DEM 90m elevations for up to 100 sampled route points
+ * directly from Open-Meteo's CORS-enabled Elevation API.
+ */
+export async function fetchDemElevations(
+  coords: Array<{ lat: number; lon: number }>
+): Promise<number[]> {
+  if (!Array.isArray(coords) || coords.length === 0 || coords.length > 100) {
+    throw new Error("Jumlah titik kalibrasi DEM harus antara 1 sampai 100.");
+  }
+
+  const lats = coords.map((c) => Number(c.lat).toFixed(5)).join(",");
+  const lons = coords.map((c) => Number(c.lon).toFixed(5)).join(",");
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(8000),
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Layanan DEM Open-Meteo mengembalikan HTTP ${res.status}.`);
+  }
+
+  const json = await res.json();
+  const elevation: number[] = Array.isArray(json?.elevation) ? json.elevation : [];
+  if (elevation.length !== coords.length) {
+    throw new Error("Respon elevasi DEM tidak lengkap.");
+  }
+
+  return elevation;
 }
