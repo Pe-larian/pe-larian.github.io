@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --surface-paper: #f5f5f3;
+  --surface-card: #ffffff;
+  --ink-primary: #161e19;
+  --ink-secondary: #525c56;
+  --border-subtle: #e2e5e2;
+  --border-control: #8c948e;
+  --accent-trail: #1e6b3a;
+  --accent-cta: #1b2b22;
+  --status-safe-fg: #146342;
+  --status-safe-bg: #eaf6f0;
+  --status-tight-fg: #8a4b00;
+  --status-tight-bg: #fdf3e3;
+  --status-alert-fg: #991b1b;
+  --status-alert-bg: #fee2e2;
+}
+
+@layer base {
+  html,
+  body {
+    font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+    color: var(--ink-primary);
+    background-color: var(--surface-paper);
+    overflow-x: hidden;
+  }
+
+  /* Accessible interaction affordances (antislop R-39) */
+  a[href],
+  button:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label[for],
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  /* High-contrast keyboard focus ring (antislop R-32) */
+  :focus-visible {
+    outline: 2px solid var(--accent-trail);
+    outline-offset: 2px;
+  }
+}
+
+.font-num {
+  font-family: var(--font-num), var(--font-ui), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion support (antislop R-39) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* MapLibre clean attribution styling */
+.maplibregl-ctrl-attrib {
+  font-size: 11px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #525c56 !important;
+  border-radius: 6px !important;
+  margin: 0 12px 12px 0 !important;
+  padding: 2px 8px !important;
+}
+
+/* Clean print stylesheet for Wrist Pace Band and A6 Vest Pocket Card */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only-sheet {
+    display: block !important;
+    position: static !important;
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+    margin: 0 auto !important;
+  }
+}
