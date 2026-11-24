@@ -30,6 +30,10 @@ import type {
   TrackPoint,
   WeatherForecastResult,
 } from "@/lib/race-engine/types";
+import {
+  fetchDemElevations,
+  fetchRaceWeatherForecast,
+} from "@/lib/race-engine/openMeteoClient";
 import { buildClimateFallbackForecast } from "@/lib/race-engine/weather";
 
 interface UndoSnapshot {
@@ -165,7 +169,7 @@ export function RacePlannerApp() {
     });
   }, []);
 
-  // Fetch real Open-Meteo forecast via stateless proxy whenever route start or race date changes
+  // Fetch Open-Meteo forecast directly in browser (CORS-enabled, zero user data proxied)
   const startLat = points[0]?.lat ?? -8.3669;
   const startLon = points[0]?.lon ?? 116.5335;
   const startEle = points[0]?.ele ?? 0;
@@ -176,17 +180,14 @@ export function RacePlannerApp() {
     async function loadWeather() {
       setWeatherLoading(true);
       try {
-        const params = new URLSearchParams({
-          lat: startLat.toFixed(4),
-          lon: startLon.toFixed(4),
-          baseEle: String(Math.round(startEle)),
-          maxEle: String(Math.round(totals.maxEleM)),
-          date: metadata.raceDate,
-          tz: metadata.timezone,
+        const data = await fetchRaceWeatherForecast({
+          lat: startLat,
+          lon: startLon,
+          baseEleM: Math.round(startEle),
+          maxEleM: Math.round(totals.maxEleM),
+          raceDate: metadata.raceDate,
+          timezone: metadata.timezone,
         });
-        const res = await fetch(`/api/weather?${params.toString()}`);
-        if (!res.ok) throw new Error("Weather request failed");
-        const data = (await res.json()) as WeatherForecastResult;
         if (!cancelled && data?.hourly?.length > 0) {
           setWeather(data);
         }
@@ -356,24 +357,14 @@ export function RacePlannerApp() {
         }
       }
 
-      const res = await fetch("/api/elevation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          points: sampledIndices.map((idx) => ({
-            lat: points[idx].lat,
-            lon: points[idx].lon,
-          })),
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !Array.isArray(json.elevation) || json.elevation.length !== sampledIndices.length) {
-        throw new Error(json?.error || "Respon elevasi DEM tidak lengkap.");
-      }
+      const demValues = await fetchDemElevations(
+        sampledIndices.map((idx) => ({
+          lat: points[idx].lat,
+          lon: points[idx].lon,
+        }))
+      );
 
       pushUndo();
-      const demValues: number[] = json.elevation;
       const calibrated = points.map((pt, i) => {
         // Linearly interpolate calibrated DEM values between sampled anchors
         let anchorPos = 0;
