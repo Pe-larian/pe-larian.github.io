@@ -1,0 +1,3 @@
+{
+  "install": "node -v && npm -v && pnpm -v && python3 --version && git --version"
+}
