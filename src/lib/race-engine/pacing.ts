@@ -497,6 +497,22 @@ export function simulateRace(
       : avgPaceSecPerKm;
 
   const lastSeg = segments[segments.length - 1];
+  let finalCutoffBufferSec = lastSeg?.cutoffBufferSec;
+  let finalCutoffStatus: RaceSimulationSummary["finalCutoffStatus"] =
+    lastSeg?.cutoffStatus ?? "none";
+
+  if (metadata.globalCutoffHours !== undefined && metadata.globalCutoffHours > 0) {
+    const globalCutoffSec = Math.round(metadata.globalCutoffHours * 3600);
+    finalCutoffBufferSec = Math.round(globalCutoffSec - totalElapsedSec);
+    if (finalCutoffBufferSec < 0) {
+      finalCutoffStatus = "missed";
+    } else if (finalCutoffBufferSec < 1800) {
+      finalCutoffStatus = "tight";
+    } else {
+      finalCutoffStatus = "safe";
+    }
+  }
+
   const safety = evaluateFuelingSafety({
     totalRaceHours,
     totalFluidMl,
@@ -523,8 +539,8 @@ export function simulateRace(
     finishClockTime: formatClockTime(startClockSec, totalElapsedSec, metadata.timezone),
     avgPaceSecPerKm,
     avgGapSecPerKm,
-    finalCutoffBufferSec: lastSeg?.cutoffBufferSec,
-    finalCutoffStatus: lastSeg?.cutoffStatus ?? "none",
+    finalCutoffBufferSec,
+    finalCutoffStatus,
     totalCarbsG,
     totalFluidMl,
     totalSodiumMg,

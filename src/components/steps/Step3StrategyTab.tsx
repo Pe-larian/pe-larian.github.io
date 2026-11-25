@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { RoadPaceStrategyChart } from "@/components/chart/RoadPaceStrategyChart";
 import {
   IconAlert,
   IconCheck,
   IconChevronDown,
   IconCopy,
+  IconMinus,
+  IconPlus,
   IconPrint,
   IconSliders,
 } from "@/components/Icons";
@@ -16,6 +19,7 @@ import type {
   RaceSimulationSummary,
   RunnerProfile,
   SegmentSimulation,
+  StrategyGroupingMode,
   SweatSodiumCategory,
 } from "@/lib/race-engine/types";
 
@@ -23,6 +27,10 @@ interface Step3StrategyTabProps {
   discipline: RaceDiscipline;
   profile: RunnerProfile;
   simulation: RaceSimulationSummary;
+  strategyGrouping: StrategyGroupingMode;
+  onChangeStrategyGrouping: (mode: StrategyGroupingMode) => void;
+  systemSegmentCount: number;
+  customCheckpointCount: number;
   onUpdateProfile: (patch: Partial<RunnerProfile>) => void;
   onFocusSegment: (segIdx: number) => void;
   onOpenPrintModal: () => void;
@@ -60,16 +68,14 @@ function cutoffBadge(seg: SegmentSimulation) {
   );
 }
 
-function splitLabelText(splitPct: number): string {
-  if (splitPct <= -2) return `Negative Split (${splitPct}% · paruh akhir lebih cepat)`;
-  if (splitPct >= 2) return `Positive Split (+${splitPct}% · paruh awal lebih cepat)`;
-  return "Even Split (0% · pace rata stabil)";
-}
-
 export function Step3StrategyTab({
   discipline,
   profile,
   simulation,
+  strategyGrouping,
+  onChangeStrategyGrouping,
+  systemSegmentCount,
+  customCheckpointCount,
   onUpdateProfile,
   onFocusSegment,
   onOpenPrintModal,
@@ -77,20 +83,27 @@ export function Step3StrategyTab({
   copiedWa,
 }: Step3StrategyTabProps) {
   const [showAdvancedFuel, setShowAdvancedFuel] = useState(false);
+  const [weightDraft, setWeightDraft] = useState(String(profile.weightKg));
+
+  useEffect(() => {
+    setWeightDraft(String(profile.weightKg));
+  }, [profile.weightKg]);
+
+  const commitWeightDraft = (raw: string) => {
+    const parsed = Number(raw);
+    if (!raw.trim() || !Number.isFinite(parsed)) {
+      setWeightDraft(String(profile.weightKg));
+      return;
+    }
+    const clamped = Math.max(35, Math.min(150, Math.round(parsed)));
+    onUpdateProfile({ weightKg: clamped });
+    setWeightDraft(String(clamped));
+  };
 
   const distKm = Math.max(0.5, simulation.totalDistanceM / 1000);
   const stopSec = simulation.totalStopSec;
-
-  // Road Target Pace & Time slider bounds
-  const roadPaceSec = Math.max(
-    180,
-    Math.min(570, Math.round(simulation.avgPaceSecPerKm / 5) * 5)
-  );
-  const roadMinTimeSec = Math.round(distKm * 180 + stopSec);
-  const roadMaxTimeSec = Math.round(distKm * 570 + stopSec);
   const currentTimeSec = Math.round(simulation.totalElapsedSec);
 
-  // Trail Target Time slider bounds based on Naismith equivalent distance
   const trailMinTimeSec = Math.max(
     1800,
     Math.round(simulation.equivalentDistanceKm * 240 + stopSec)
@@ -100,218 +113,13 @@ export function Step3StrategyTab({
     Math.round(simulation.equivalentDistanceKm * 720 + stopSec)
   );
 
-  const finalBannerClasses =
-    simulation.finalCutoffStatus === "missed"
-      ? "border-[#FECACA] bg-[#FEE2E2] text-[#991B1B]"
-      : simulation.finalCutoffStatus === "tight"
-        ? "border-[#FDE68A] bg-[#FDF3E3] text-[#8A4B00]"
-        : "border-[#CBEAD9] bg-[#EAF6F0] text-[#146342]";
+  // Single dynamic IF-ELSE COT banner: red if missed, green if safe/within COT
+  const isMissedCot = simulation.finalCutoffStatus === "missed";
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
-        {/* Projected Finish & COT Banner */}
-        <div className={`rounded-xl border p-3.5 ${finalBannerClasses}`}>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide">
-                Proyeksi Finis
-              </p>
-              <p className="font-num mt-0.5 text-lg font-bold">
-                {simulation.finishClockTime} ({formatDuration(simulation.totalElapsedSec)})
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[11px] font-medium">
-                {discipline === "road" ? "Target Pace" : "Rata-rata Pace / GAP"}
-              </p>
-              <p className="font-num mt-0.5 text-xs font-bold">
-                {discipline === "road"
-                  ? `${formatPace(simulation.avgPaceSecPerKm)} /km`
-                  : `${formatPace(simulation.avgPaceSecPerKm)} / ${formatPace(
-                      simulation.avgGapSecPerKm
-                    )} /km`}
-              </p>
-            </div>
-          </div>
-
-          {simulation.finalCutoffBufferSec !== undefined && (
-            <p className="font-num mt-1.5 text-xs font-semibold">
-              {simulation.finalCutoffBufferSec >= 0
-                ? `Margin COT akhir: +${formatDuration(simulation.finalCutoffBufferSec)} lebih cepat dari batas waktu.`
-                : `Peringatan: melewati COT akhir sebesar ${formatDuration(
-                    Math.abs(simulation.finalCutoffBufferSec)
-                  )}.`}
-            </p>
-          )}
-        </div>
-
-        {/* Full-Width Pacing Sliders (Road vs Trail) */}
-        <section
-          aria-labelledby="heading-pacing-sliders"
-          className="space-y-3 rounded-xl border border-[#E2E5E2] bg-white p-3.5"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <h2
-              id="heading-pacing-sliders"
-              className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
-            >
-              {discipline === "road"
-                ? "Atur Target Pace, Waktu & Split"
-                : "Atur Target Waktu Finis Trail"}
-            </h2>
-            {profile.targetFinishTimeSec !== undefined && (
-              <button
-                type="button"
-                onClick={() => onUpdateProfile({ targetFinishTimeSec: undefined })}
-                className="text-[11px] font-semibold text-[#1E6B3A] hover:underline"
-              >
-                Reset otomatis
-              </button>
-            )}
-          </div>
-
-          {discipline === "road" ? (
-            <div className="space-y-3">
-              {/* Full-width Target Pace Slider */}
-              <div className="w-full">
-                <div className="flex items-center justify-between text-xs">
-                  <label htmlFor="road-pace-slider" className="font-semibold text-[#161E19]">
-                    Target Pace Rata-rata
-                  </label>
-                  <span className="font-num font-bold text-[#1E6B3A]">
-                    {formatPace(roadPaceSec)} /km
-                  </span>
-                </div>
-                <input
-                  id="road-pace-slider"
-                  type="range"
-                  min={180}
-                  max={570}
-                  step={5}
-                  value={roadPaceSec}
-                  onChange={(e) => {
-                    const nextPace = Number(e.target.value);
-                    const nextTotalSec = Math.round(distKm * nextPace + stopSec);
-                    onUpdateProfile({
-                      flatThresholdPaceSecPerKm: nextPace,
-                      targetFinishTimeSec: nextTotalSec,
-                    });
-                  }}
-                  className="mt-1.5 block h-2.5 w-full accent-[#1E6B3A]"
-                />
-                <div className="font-num mt-0.5 flex justify-between text-[10px] text-[#525C56]">
-                  <span>3:00 /km</span>
-                  <span>6:15 /km</span>
-                  <span>9:30 /km</span>
-                </div>
-              </div>
-
-              {/* Full-width Target Finish Time Slider */}
-              <div className="w-full">
-                <div className="flex items-center justify-between text-xs">
-                  <label htmlFor="road-time-slider" className="font-semibold text-[#161E19]">
-                    Target Waktu Finis
-                  </label>
-                  <span className="font-num font-bold text-[#161E19]">
-                    {formatDuration(currentTimeSec)}
-                  </span>
-                </div>
-                <input
-                  id="road-time-slider"
-                  type="range"
-                  min={roadMinTimeSec}
-                  max={roadMaxTimeSec}
-                  step={60}
-                  value={Math.max(roadMinTimeSec, Math.min(roadMaxTimeSec, currentTimeSec))}
-                  onChange={(e) => {
-                    const nextTime = Number(e.target.value);
-                    const nextPace = Math.max(
-                      180,
-                      Math.min(570, Math.round((nextTime - stopSec) / distKm))
-                    );
-                    onUpdateProfile({
-                      targetFinishTimeSec: nextTime,
-                      flatThresholdPaceSecPerKm: nextPace,
-                    });
-                  }}
-                  className="mt-1.5 block h-2.5 w-full accent-[#1E6B3A]"
-                />
-                <div className="font-num mt-0.5 flex justify-between text-[10px] text-[#525C56]">
-                  <span>{formatDuration(roadMinTimeSec)}</span>
-                  <span>{formatDuration(roadMaxTimeSec)}</span>
-                </div>
-              </div>
-
-              {/* Full-width Positive / Negative Split Slider */}
-              <div className="w-full border-t border-[#E2E5E2] pt-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
-                  <label htmlFor="road-split-slider" className="font-semibold text-[#161E19]">
-                    Strategi Split
-                  </label>
-                  <span className="font-num text-[11px] font-bold text-[#1E6B3A]">
-                    {splitLabelText(profile.roadSplitPct)}
-                  </span>
-                </div>
-                <input
-                  id="road-split-slider"
-                  type="range"
-                  min={-10}
-                  max={10}
-                  step={1}
-                  value={profile.roadSplitPct}
-                  onChange={(e) =>
-                    onUpdateProfile({ roadSplitPct: Number(e.target.value) })
-                  }
-                  className="mt-1.5 block h-2.5 w-full accent-[#1E6B3A]"
-                />
-                <div className="mt-0.5 flex justify-between text-[10px] text-[#525C56]">
-                  <span>Negative (-10%)</span>
-                  <span>Even (0%)</span>
-                  <span>Positive (+10%)</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between rounded-lg bg-[#F5F5F3] px-3 py-2 text-xs">
-                <span className="text-[#525C56]">Jarak Ekuivalen (Naismith)</span>
-                <span className="font-num font-bold text-[#161E19]">
-                  {simulation.equivalentDistanceKm} km-effort
-                </span>
-              </div>
-
-              <div className="w-full">
-                <div className="flex items-center justify-between text-xs">
-                  <label htmlFor="trail-time-slider" className="font-semibold text-[#161E19]">
-                    Target Waktu Finis
-                  </label>
-                  <span className="font-num font-bold text-[#1E6B3A]">
-                    {formatDuration(currentTimeSec)}
-                  </span>
-                </div>
-                <input
-                  id="trail-time-slider"
-                  type="range"
-                  min={trailMinTimeSec}
-                  max={trailMaxTimeSec}
-                  step={300}
-                  value={Math.max(trailMinTimeSec, Math.min(trailMaxTimeSec, currentTimeSec))}
-                  onChange={(e) =>
-                    onUpdateProfile({ targetFinishTimeSec: Number(e.target.value) })
-                  }
-                  className="mt-1.5 block h-2.5 w-full accent-[#1E6B3A]"
-                />
-                <div className="font-num mt-0.5 flex justify-between text-[10px] text-[#525C56]">
-                  <span>{formatDuration(trailMinTimeSec)}</span>
-                  <span>{formatDuration(trailMaxTimeSec)}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* Standard Fueling Summary + Pre-Race + 30-Min Schedule */}
+        {/* 1. TOP CARD: KEBUTUHAN NUTRISI STANDAR + Inline Weight Stepper (per Section 1.pdf) */}
         <section
           aria-labelledby="heading-fueling-summary"
           className="rounded-xl border border-[#E2E5E2] bg-[#F5F5F3] p-3.5"
@@ -336,6 +144,69 @@ export function Step3StrategyTab({
                 className={`transition-transform ${showAdvancedFuel ? "rotate-180" : ""}`}
               />
             </button>
+          </div>
+
+          {/* Inline Weight Stepper */}
+          <div className="mt-2.5">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label
+                htmlFor="strategy-weight-input"
+                className="text-[11px] font-semibold text-[#161E19]"
+              >
+                Berat badan (kg)
+              </label>
+              <span className="text-[10px] text-[#525C56]">
+                Dasar hitung hidrasi & kalori
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.max(35, profile.weightKg - 1);
+                  onUpdateProfile({ weightKg: next });
+                  setWeightDraft(String(next));
+                }}
+                aria-label="Kurangi berat badan 1 kg"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#8C948E] bg-white text-[#161E19] hover:bg-[#ECEFED]"
+              >
+                <IconMinus size={15} />
+              </button>
+              <input
+                id="strategy-weight-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={weightDraft}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                  setWeightDraft(cleaned);
+                  if (cleaned !== "") {
+                    const num = Number(cleaned);
+                    if (Number.isFinite(num) && num >= 35 && num <= 150) {
+                      onUpdateProfile({ weightKg: num });
+                    }
+                  }
+                }}
+                onBlur={() => commitWeightDraft(weightDraft)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitWeightDraft(weightDraft);
+                }}
+                className="font-num min-h-[40px] w-full rounded-lg border border-[#8C948E] bg-white px-2 text-center text-sm font-bold text-[#161E19]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const next = Math.min(150, profile.weightKg + 1);
+                  onUpdateProfile({ weightKg: next });
+                  setWeightDraft(String(next));
+                }}
+                aria-label="Tambah berat badan 1 kg"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#8C948E] bg-white text-[#161E19] hover:bg-[#ECEFED]"
+              >
+                <IconPlus size={15} />
+              </button>
+            </div>
           </div>
 
           <div className="mt-2.5 grid grid-cols-3 gap-2 rounded-lg border border-[#E2E5E2] bg-white p-2.5 text-center">
@@ -368,7 +239,6 @@ export function Step3StrategyTab({
             </div>
           </div>
 
-          {/* Actionable Pre-Race & 30-Min Schedule */}
           <div className="mt-2 space-y-1.5 rounded-lg border border-[#E2E5E2] bg-white p-2.5 text-xs text-[#161E19]">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[#525C56]">Makan Pra-Lari (2-3 jam sebelum start)</span>
@@ -395,7 +265,6 @@ export function Step3StrategyTab({
             )}
           </div>
 
-          {/* Safety Guardrails */}
           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
             <span
               className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold ${
@@ -420,7 +289,6 @@ export function Step3StrategyTab({
             )}
           </div>
 
-          {/* Optional Simple Profile Adjustments */}
           {showAdvancedFuel && (
             <div className="mt-3 space-y-2.5 border-t border-[#E2E5E2] pt-3">
               <div className="grid grid-cols-2 gap-2">
@@ -486,14 +354,186 @@ export function Step3StrategyTab({
           )}
         </section>
 
-        {/* Per-Segment Pacing + Fueling Cards */}
-        <section aria-labelledby="heading-strategy-segments" className="space-y-2.5">
-          <h2
-            id="heading-strategy-segments"
-            className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
+        {/* 2. MIDDLE CARD: PACING STRATEGY + SINGLE DYNAMIC IF-ELSE COT BANNER */}
+        <section
+          aria-labelledby="heading-pacing-sliders"
+          className="space-y-3 rounded-xl border border-[#E2E5E2] bg-white p-3.5"
+        >
+          {discipline === "road" ? (
+            <>
+              <h2 id="heading-pacing-sliders" className="sr-only">
+                Atur Strategi Pace Road
+              </h2>
+              <RoadPaceStrategyChart
+                distanceKm={distKm}
+                stopSec={stopSec}
+                avgPaceSecPerKm={simulation.avgPaceSecPerKm}
+                totalElapsedSec={simulation.totalElapsedSec}
+                roadSplitPct={profile.roadSplitPct}
+                onChangePaceSec={(nextPace) => {
+                  const nextTotalSec = Math.round(distKm * nextPace + stopSec);
+                  onUpdateProfile({
+                    flatThresholdPaceSecPerKm: nextPace,
+                    targetFinishTimeSec: nextTotalSec,
+                  });
+                }}
+                onChangeSplitPct={(nextSplit) =>
+                  onUpdateProfile({ roadSplitPct: nextSplit })
+                }
+                onReset={() =>
+                  onUpdateProfile({
+                    targetFinishTimeSec: undefined,
+                    flatThresholdPaceSecPerKm: 330,
+                    roadSplitPct: 0,
+                  })
+                }
+              />
+            </>
+          ) : (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h2
+                  id="heading-pacing-sliders"
+                  className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
+                >
+                  Atur Target Waktu Finis Trail
+                </h2>
+                {profile.targetFinishTimeSec !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateProfile({ targetFinishTimeSec: undefined })}
+                    className="text-[11px] font-semibold text-[#1E6B3A] hover:underline"
+                  >
+                    Reset otomatis
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg bg-[#F5F5F3] px-3 py-2 text-xs">
+                <span className="text-[#525C56]">Jarak Ekuivalen (Naismith)</span>
+                <span className="font-num font-bold text-[#161E19]">
+                  {simulation.equivalentDistanceKm} km-effort
+                </span>
+              </div>
+
+              <div className="w-full">
+                <div className="flex items-center justify-between text-xs">
+                  <label htmlFor="trail-time-slider" className="font-semibold text-[#161E19]">
+                    Target Waktu Finis
+                  </label>
+                  <span className="font-num font-bold text-[#1E6B3A]">
+                    {formatDuration(currentTimeSec)}
+                  </span>
+                </div>
+                <input
+                  id="trail-time-slider"
+                  type="range"
+                  min={trailMinTimeSec}
+                  max={trailMaxTimeSec}
+                  step={300}
+                  value={Math.max(trailMinTimeSec, Math.min(trailMaxTimeSec, currentTimeSec))}
+                  onChange={(e) =>
+                    onUpdateProfile({ targetFinishTimeSec: Number(e.target.value) })
+                  }
+                  className="mt-1.5 block h-2.5 w-full accent-[#1E6B3A]"
+                />
+                <div className="font-num mt-0.5 flex justify-between text-[10px] text-[#525C56]">
+                  <span>{formatDuration(trailMinTimeSec)}</span>
+                  <span>{formatDuration(trailMaxTimeSec)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Single Dynamic IF-ELSE COT Status Banner (Green when safe, Red when past COT) */}
+          <div
+            role="status"
+            className={`rounded-xl border p-3 transition-colors ${
+              isMissedCot
+                ? "border-[#FECACA] bg-[#FEE2E2] text-[#991B1B]"
+                : "border-[#CBEAD9] bg-[#EAF6F0] text-[#146342]"
+            }`}
           >
-            Rencana Per Segmen ({simulation.segments.length})
-          </h2>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide">
+                  Proyeksi Finis
+                </p>
+                <p className="font-num mt-0.5 text-base font-extrabold">
+                  {simulation.finishClockTime} ({formatDuration(simulation.totalElapsedSec)})
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-medium">
+                  {discipline === "road" ? "Target Pace" : "Pace / GAP"}
+                </p>
+                <p className="font-num mt-0.5 text-xs font-bold">
+                  {discipline === "road"
+                    ? `${formatPace(simulation.avgPaceSecPerKm)} /km`
+                    : `${formatPace(simulation.avgPaceSecPerKm)} / ${formatPace(
+                        simulation.avgGapSecPerKm
+                      )} /km`}
+                </p>
+              </div>
+            </div>
+
+            {simulation.finalCutoffBufferSec !== undefined && (
+              <p className="font-num mt-1.5 text-xs font-bold">
+                {isMissedCot
+                  ? `MELEWATI BATAS COT: +${formatDuration(
+                      Math.abs(simulation.finalCutoffBufferSec)
+                    )} lebih lambat dari batas waktu.`
+                  : `Margin COT akhir: +${formatDuration(
+                      simulation.finalCutoffBufferSec
+                    )} lebih cepat dari batas waktu.`}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* 3. BOTTOM SECTION: PER-SEGMENT / PER-CHECKPOINT CARDS WITH SYNCED SWITCHER */}
+        <section aria-labelledby="heading-strategy-segments" className="space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2
+              id="heading-strategy-segments"
+              className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
+            >
+              {strategyGrouping === "segments"
+                ? `Rencana Per Segmen (${simulation.segments.length})`
+                : `Rencana Per Checkpoint (${simulation.segments.length})`}
+            </h2>
+
+            <div
+              className="inline-flex rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-0.5"
+              role="group"
+              aria-label="Pilih tampilan strategi per segmen atau checkpoint"
+            >
+              <button
+                type="button"
+                onClick={() => onChangeStrategyGrouping("segments")}
+                aria-pressed={strategyGrouping === "segments"}
+                className={`min-h-[30px] rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+                  strategyGrouping === "segments"
+                    ? "bg-[#1B2B22] text-white"
+                    : "text-[#525C56] hover:text-[#161E19]"
+                }`}
+              >
+                Segmen ({systemSegmentCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => onChangeStrategyGrouping("checkpoints")}
+                aria-pressed={strategyGrouping === "checkpoints"}
+                className={`min-h-[30px] rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+                  strategyGrouping === "checkpoints"
+                    ? "bg-[#1B2B22] text-white"
+                    : "text-[#525C56] hover:text-[#161E19]"
+                }`}
+              >
+                CP ({customCheckpointCount})
+              </button>
+            </div>
+          </div>
 
           {simulation.segments.map((seg) => (
             <article
@@ -506,7 +546,8 @@ export function Step3StrategyTab({
                   onClick={() => onFocusSegment(seg.index)}
                   className="text-left text-xs font-bold text-[#161E19] hover:text-[#1E6B3A]"
                 >
-                  S{seg.index + 1}: {seg.fromCp.name} -&gt; {seg.toCp.name}
+                  {strategyGrouping === "segments" ? `S${seg.index + 1}` : `CP${seg.index + 1}`}:{" "}
+                  {seg.fromCp.name} -&gt; {seg.toCp.name}
                 </button>
                 {cutoffBadge(seg)}
               </div>
@@ -543,7 +584,6 @@ export function Step3StrategyTab({
                 </p>
               )}
 
-              {/* Fueling Breakdown Box: Road omits carry weight & flasks */}
               <div className="mt-2 rounded-lg border border-[#E2E5E2] bg-[#FAFAF8] p-2.5">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold text-[#161E19]">Target Fueling Segmen</span>

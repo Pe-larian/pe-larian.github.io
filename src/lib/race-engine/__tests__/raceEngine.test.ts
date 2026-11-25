@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSystemSegmentsCheckpoints,
   cleanSpikes,
   computeElevationTotals,
   detectSpikes,
@@ -205,5 +206,42 @@ describe("Timezone auto-detection & static Open-Meteo adapter", () => {
 
   it("validates DEM coordinate bounds before fetching", async () => {
     await expect(fetchDemElevations([])).rejects.toThrow(/1 sampai 100/);
+  });
+
+  it("generates system segments independently from custom checkpoints and evaluates globalCutoffHours IF-ELSE", () => {
+    const roadSample = buildSampleRoute("road");
+    const sysCps = buildSystemSegmentsCheckpoints(roadSample.points, "road");
+    expect(sysCps.length).toBeGreaterThanOrEqual(4);
+    expect(sysCps[0].type).toBe("start");
+    expect(sysCps[sysCps.length - 1].type).toBe("finish");
+
+    const forecast = buildClimateFallbackForecast(
+      roadSample.points[0].lat,
+      roadSample.points[0].lon,
+      roadSample.points[0].ele,
+      18,
+      BASE_META.raceDate,
+      "WIB"
+    );
+
+    const safeSim = simulateRace(
+      roadSample.points,
+      sysCps,
+      { ...BASE_META, discipline: "road", timezone: "WIB", globalCutoffHours: 5 },
+      { ...BASE_PROFILE, targetFinishTimeSec: 3.5 * 3600 },
+      forecast
+    );
+    expect(safeSim.finalCutoffStatus).toBe("safe");
+    expect(safeSim.finalCutoffBufferSec).toBeGreaterThan(0);
+
+    const missedSim = simulateRace(
+      roadSample.points,
+      sysCps,
+      { ...BASE_META, discipline: "road", timezone: "WIB", globalCutoffHours: 3 },
+      { ...BASE_PROFILE, targetFinishTimeSec: 3.5 * 3600 },
+      forecast
+    );
+    expect(missedSim.finalCutoffStatus).toBe("missed");
+    expect(missedSim.finalCutoffBufferSec).toBeLessThan(0);
   });
 });

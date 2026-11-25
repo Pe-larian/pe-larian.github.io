@@ -27,6 +27,8 @@ export type SweatSodiumCategory = "low" | "moderate" | "high" | "custom";
 
 export type TimezoneCode = "WIB" | "WITA" | "WIT";
 
+export type StrategyGroupingMode = "segments" | "checkpoints";
+
 export interface TrackPoint {
   lat: number;
   lon: number;
@@ -53,12 +55,13 @@ export interface Checkpoint {
 }
 
 export interface RaceMetadata {
-  runnerName: string;
+  runnerName?: string;
   raceName: string;
   discipline: RaceDiscipline;
   raceDate: string; // YYYY-MM-DD
   startTime: string; // HH:MM
   timezone: TimezoneCode;
+  globalCutoffHours?: number;
   isSample: boolean;
   sourceFileName: string;
 }

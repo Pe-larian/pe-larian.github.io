@@ -3,21 +3,20 @@
 import { useMemo } from "react";
 import {
   IconArrowLeft,
-  IconDownload,
-  IconLocate,
   IconMap,
   IconMinus,
-  IconMountain,
   IconPin,
   IconPlus,
-  IconUndo,
 } from "@/components/Icons";
 import { PrintCardModal } from "@/components/print/PrintCardModal";
 import { Step1SetupDrawer } from "@/components/steps/Step1SetupDrawer";
 import { Step2ConfirmDrawer } from "@/components/steps/Step2ConfirmDrawer";
 import { Step3OverviewTab } from "@/components/steps/Step3OverviewTab";
 import { Step3StrategyTab } from "@/components/steps/Step3StrategyTab";
-import { computeElevationTotals } from "@/lib/race-engine/gpx";
+import {
+  buildSystemSegmentsCheckpoints,
+  computeElevationTotals,
+} from "@/lib/race-engine/gpx";
 import { simulateRace } from "@/lib/race-engine/pacing";
 import { buildSampleRoute } from "@/lib/race-engine/sampleRoutes";
 import type { RaceMetadata, RunnerProfile } from "@/lib/race-engine/types";
@@ -26,15 +25,16 @@ import { buildClimateFallbackForecast } from "@/lib/race-engine/weather";
 const noop = () => {};
 
 function StaticOsmMapBackdrop({
-  showStep2Toolbar = false,
-  showStep3Legend = false,
+  expandedLayerMenu = false,
+  showAddCpPill = true,
+  showMobileFullMapBtn = false,
 }: {
-  showStep2Toolbar?: boolean;
-  showStep3Legend?: boolean;
+  expandedLayerMenu?: boolean;
+  showAddCpPill?: boolean;
+  showMobileFullMapBtn?: boolean;
 }) {
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#E5ECE6]">
-      {/* Real OpenStreetMap raster tile grid for crisp Figma / html.to.design capture */}
       <div className="grid h-full w-full grid-cols-6 grid-rows-4 opacity-95">
         {[
           [3372, 2142],
@@ -71,7 +71,6 @@ function StaticOsmMapBackdrop({
         ))}
       </div>
 
-      {/* Vector GPX route overlay */}
       <svg
         viewBox="0 0 1440 900"
         className="pointer-events-none absolute inset-0 h-full w-full"
@@ -114,99 +113,48 @@ function StaticOsmMapBackdrop({
         />
       </svg>
 
-      {/* Checkpoint Markers */}
-      <div className="absolute left-[1168px] top-[268px] flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#1E6B3A] text-[11px] font-bold text-white shadow">
-        S
-      </div>
-      <div className="absolute left-[978px] top-[368px] flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white text-[11px] font-bold text-[#161E19] shadow">
-        1
-      </div>
-      <div className="absolute left-[848px] top-[468px] flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#B91C1C] text-[11px] font-bold text-white shadow">
-        P
-      </div>
-      <div className="absolute left-[708px] top-[478px] flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-white text-[11px] font-bold text-[#161E19] shadow">
-        3
-      </div>
-      <div className="absolute left-[548px] top-[398px] flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-[#161E19] text-[11px] font-bold text-white shadow">
-        F
-      </div>
-
-      {/* Top-right layer switcher */}
-      <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-sm">
-        <span className="rounded-full bg-[#1B2B22] px-3 py-1.5 text-xs font-semibold text-white">
-          OSM
-        </span>
-        <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#161E19]">
-          Topo
-        </span>
-        <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#161E19]">
-          3D
-        </span>
-        <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-[#161E19]">
-          Satelit
-        </span>
-      </div>
-
-      {/* Right-edge circular controls */}
-      <div className="absolute right-3 top-1/2 flex -translate-y-1/2 flex-col gap-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-xs font-bold text-[#161E19] shadow-sm">
-          3D
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm">
-          <IconPlus size={18} />
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm">
-          <IconMinus size={18} />
-        </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm">
-          <IconLocate size={18} />
-        </div>
-      </div>
-
-      {showStep2Toolbar && (
-        <div className="absolute bottom-4 left-[476px] right-16 flex justify-center">
-          <div className="flex w-max items-center gap-1.5 whitespace-nowrap rounded-full border border-[#E2E5E2] bg-white/95 px-3 py-1.5 shadow-md">
-            <span className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#161E19]">
-              <IconPin size={14} />
-              Tambah CP di Peta
-            </span>
-            <span className="h-5 w-px bg-[#E2E5E2]" />
-            <span className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#161E19]">
-              Hapus titik loncat
-              <span className="font-num rounded-full bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
-                3
+      {/* Top-right control cluster */}
+      <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+        {showMobileFullMapBtn && (
+          <span className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-[#E2E5E2] bg-white/95 px-3 text-xs font-semibold text-[#161E19] shadow-sm">
+            <IconMap size={14} />
+            Lihat Peta Penuh
+          </span>
+        )}
+        <div className="flex items-center gap-1.5">
+          {expandedLayerMenu && (
+            <div className="flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-md">
+              <span className="rounded-full bg-[#1B2B22] px-3 py-1 text-xs font-semibold text-white">
+                OSM
               </span>
-            </span>
-            <span className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-[#161E19]">
-              <IconMountain size={14} />
-              Perbaiki elevasi
-            </span>
-            <span className="inline-flex min-h-[36px] items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-[#161E19]/40">
-              <IconUndo size={14} />
-              Undo
-            </span>
-            <span className="h-5 w-px bg-[#E2E5E2]" />
-            <span className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-[#1B2B22] px-3.5 text-xs font-semibold text-white">
-              <IconDownload size={14} />
-              Export .gpx
-            </span>
+              <span className="rounded-full px-3 py-1 text-xs font-semibold text-[#161E19]">
+                Topo
+              </span>
+              <span className="rounded-full px-3 py-1 text-xs font-semibold text-[#161E19]">
+                3D
+              </span>
+              <span className="rounded-full px-3 py-1 text-xs font-semibold text-[#161E19]">
+                Satelit
+              </span>
+            </div>
+          )}
+          <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[11px] font-bold text-[#161E19] shadow-sm">
+            OSM
           </div>
         </div>
-      )}
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm">
+          <IconPlus size={18} />
+        </div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm">
+          <IconMinus size={18} />
+        </div>
+      </div>
 
-      {showStep3Legend && (
-        <div className="absolute bottom-9 right-3 flex items-center gap-3 rounded-full border border-[#E2E5E2] bg-white/95 px-3 py-1.5 text-[11px] font-medium text-[#161E19] shadow-sm">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1E6B3A]" />
-            &lt;8%
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#D97706]" />
-            8-15%
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#B91C1C]" />
-            &gt;15%
+      {showAddCpPill && (
+        <div className="absolute bottom-3 right-3">
+          <span className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-[#1B2B22] px-4 text-xs font-semibold text-white shadow-md">
+            <IconPin size={14} />
+            Tambah CP di Peta
           </span>
         </div>
       )}
@@ -264,7 +212,7 @@ function DrawerShell({
                     ? "bg-[#1B2B22] text-white"
                     : completed
                       ? "bg-[#EAF6F0] text-[#146342]"
-                      : "bg-[#F5F5F3] text-[#525C56]"
+                      : "bg-[#F5F5F3] text-[#525C56]/55"
                 }`}
               >
                 <span className="font-num">{s.num}.</span>
@@ -305,29 +253,37 @@ function DrawerShell({
 export function FigmaArtboardFlow() {
   const trailSample = useMemo(() => buildSampleRoute("trail"), []);
   const roadSample = useMemo(() => buildSampleRoute("road"), []);
+  const trailSystemCps = useMemo(
+    () => buildSystemSegmentsCheckpoints(trailSample.points, "trail"),
+    [trailSample.points]
+  );
+  const roadSystemCps = useMemo(
+    () => buildSystemSegmentsCheckpoints(roadSample.points, "road"),
+    [roadSample.points]
+  );
   const trailTotals = useMemo(
     () => computeElevationTotals(trailSample.points),
     [trailSample]
   );
 
   const trailMeta: RaceMetadata = {
-    runnerName: "Bima Pratama",
     raceName: "Rinjani 100 60K (Sample GPX)",
     discipline: "trail",
     raceDate: "2026-11-29",
     startTime: "05:00",
     timezone: "WITA",
+    globalCutoffHours: 16,
     isSample: true,
     sourceFileName: "rinjani-60k-sample.gpx",
   };
 
   const roadMeta: RaceMetadata = {
-    runnerName: "Bima Pratama",
     raceName: "Jakarta Marathon 42K (Sample GPX)",
     discipline: "road",
     raceDate: "2026-11-29",
     startTime: "05:00",
     timezone: "WIB",
+    globalCutoffHours: 4,
     isSample: true,
     sourceFileName: "jakarta-42k-sample.gpx",
   };
@@ -382,24 +338,24 @@ export function FigmaArtboardFlow() {
     () =>
       simulateRace(
         trailSample.points,
-        trailSample.checkpoints,
+        trailSystemCps,
         trailMeta,
         trailProfile,
         trailWeather
       ),
-    [trailSample, trailMeta, trailProfile, trailWeather]
+    [trailSample, trailSystemCps, trailMeta, trailProfile, trailWeather]
   );
 
   const roadSim = useMemo(
     () =>
       simulateRace(
         roadSample.points,
-        roadSample.checkpoints,
+        roadSystemCps,
         roadMeta,
         roadProfile,
         roadWeather
       ),
-    [roadSample, roadMeta, roadProfile, roadWeather]
+    [roadSample, roadSystemCps, roadMeta, roadProfile, roadWeather]
   );
 
   const trailDistanceKm =
@@ -409,12 +365,11 @@ export function FigmaArtboardFlow() {
     <div className="min-h-screen w-max bg-[#E5E7EB] p-12 text-[#161E19]">
       <div className="mb-8 rounded-2xl border border-[#D4DAD6] bg-white px-6 py-4">
         <h1 className="text-lg font-bold text-[#161E19]">
-          [NAMA APP] · Figma Artboard Export (All Flows)
+          [NAMA APP] · Figma Artboard Export (All Flows Updated)
         </h1>
         <p className="mt-1 text-sm text-[#525C56]">
           Gunakan plugin Figma <strong>html.to.design</strong> pada URL halaman ini untuk
-          meng-import ke-7 screen flow di bawah sekaligus sebagai frame Auto Layout yang dapat
-          diedit.
+          meng-import ke-7 screen flow terbaru sekaligus sebagai frame Auto Layout.
         </p>
       </div>
 
@@ -425,7 +380,7 @@ export function FigmaArtboardFlow() {
             01 · Step 1: Data & GPX (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop />
+            <StaticOsmMapBackdrop showAddCpPill={false} />
             <DrawerShell step={1} widthClass="w-[440px]">
               <Step1SetupDrawer
                 metadata={trailMeta}
@@ -444,19 +399,21 @@ export function FigmaArtboardFlow() {
           </div>
         </section>
 
-        {/* Screen 02: Step 2 Confirmation & Editable GPX */}
+        {/* Screen 02: Step 2 Confirmation */}
         <section>
           <p className="mb-3 text-sm font-bold text-[#161E19]">
-            02 · Step 2: Konfirmasi Rute & Editable GPX (1440 x 900)
+            02 · Step 2: Konfirmasi Rute & Basis Strategi (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop showStep2Toolbar />
+            <StaticOsmMapBackdrop expandedLayerMenu />
             <DrawerShell step={2} widthClass="w-[440px]">
               <Step2ConfirmDrawer
                 metadata={trailMeta}
                 points={trailSample.points}
-                checkpoints={trailSample.checkpoints}
-                cleaningStats={trailSample.cleaningStats}
+                systemCheckpoints={trailSystemCps}
+                customCheckpoints={trailSample.checkpoints}
+                strategyGrouping="segments"
+                onChangeStrategyGrouping={noop}
                 totalDistanceKm={trailDistanceKm}
                 totalGainM={trailTotals.gainM}
                 totalLossM={trailTotals.lossM}
@@ -464,19 +421,12 @@ export function FigmaArtboardFlow() {
                 onHoverPointIndex={noop}
                 onFocusSegment={noop}
                 onUpdateRaceName={noop}
-                onUpdateCheckpoint={noop}
-                onDeleteCheckpoint={noop}
+                onUpdateSystemCheckpoint={noop}
+                onUpdateCustomCheckpoint={noop}
+                onDeleteCustomCheckpoint={noop}
                 onAddCheckpointMidpoint={noop}
                 addCpMode={false}
                 onToggleAddCpMode={noop}
-                onCleanSpikes={noop}
-                onSmoothChange={noop}
-                onCalibrateDem={noop}
-                demLoading={false}
-                demMessage={null}
-                canUndo={false}
-                onUndo={noop}
-                onExportGpx={noop}
                 onBackStep={noop}
                 onGenerateStrategy={noop}
               />
@@ -490,13 +440,17 @@ export function FigmaArtboardFlow() {
             03 · Step 3 Tab 1: Overview Rute (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop showStep3Legend />
+            <StaticOsmMapBackdrop />
             <DrawerShell step={3} tab="overview" widthClass="w-[460px]">
               <Step3OverviewTab
                 metadata={trailMeta}
                 points={trailSample.points}
-                checkpoints={trailSample.checkpoints}
+                checkpoints={trailSystemCps}
                 simulation={trailSim}
+                strategyGrouping="segments"
+                onChangeStrategyGrouping={noop}
+                systemSegmentCount={trailSystemCps.length - 1}
+                customCheckpointCount={trailSample.checkpoints.length}
                 weather={trailWeather}
                 weatherLoading={false}
                 hoveredPointIndex={null}
@@ -511,18 +465,22 @@ export function FigmaArtboardFlow() {
           </div>
         </section>
 
-        {/* Screen 04: Step 3 Tab 2 Pacing & Fueling (Mode Road) */}
+        {/* Screen 04: Step 3 Tab 2 Pacing & Fueling (Mode Road + Coros Chart) */}
         <section>
           <p className="mb-3 text-sm font-bold text-[#161E19]">
             04 · Step 3 Tab 2: Pacing & Fueling Mode Road (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop showStep3Legend />
+            <StaticOsmMapBackdrop />
             <DrawerShell step={3} tab="strategy" widthClass="w-[460px]">
               <Step3StrategyTab
                 discipline="road"
                 profile={roadProfile}
                 simulation={roadSim}
+                strategyGrouping="segments"
+                onChangeStrategyGrouping={noop}
+                systemSegmentCount={roadSystemCps.length - 1}
+                customCheckpointCount={roadSample.checkpoints.length}
                 onUpdateProfile={noop}
                 onFocusSegment={noop}
                 onOpenPrintModal={noop}
@@ -539,12 +497,16 @@ export function FigmaArtboardFlow() {
             05 · Step 3 Tab 2: Pacing & Fueling Mode Trail (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop showStep3Legend />
+            <StaticOsmMapBackdrop />
             <DrawerShell step={3} tab="strategy" widthClass="w-[460px]">
               <Step3StrategyTab
                 discipline="trail"
                 profile={trailProfile}
                 simulation={trailSim}
+                strategyGrouping="checkpoints"
+                onChangeStrategyGrouping={noop}
+                systemSegmentCount={trailSystemCps.length - 1}
+                customCheckpointCount={trailSample.checkpoints.length}
                 onUpdateProfile={noop}
                 onFocusSegment={noop}
                 onOpenPrintModal={noop}
@@ -555,13 +517,13 @@ export function FigmaArtboardFlow() {
           </div>
         </section>
 
-        {/* Screen 06: Print CP Card / Wristband Modal */}
+        {/* Screen 06: Print CP Card Modal */}
         <section>
           <p className="mb-3 text-sm font-bold text-[#161E19]">
             06 · Modal Print CP Card & Wrist Pace Band (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop showStep3Legend />
+            <StaticOsmMapBackdrop showAddCpPill={false} />
             <div className="absolute inset-0 flex items-center justify-center bg-[#161E19]/55 p-6">
               <div className="w-full max-w-2xl">
                 <PrintCardModal
@@ -578,40 +540,34 @@ export function FigmaArtboardFlow() {
           </div>
         </section>
 
-        {/* Screen 07: Mobile Responsive Reflow (390 x 844) */}
+        {/* Screen 07: Mobile Step 1 (No Map) */}
         <section>
           <p className="mb-3 text-sm font-bold text-[#161E19]">
-            07 · Mobile View Reflow (390 x 844)
+            07 · Mobile Step 1 Tanpa Peta (390 x 844)
           </p>
-          <div className="relative flex h-[844px] w-[390px] flex-col overflow-hidden rounded-3xl border border-[#CBD5E1] bg-white shadow-lg">
-            <div className="relative h-[300px] w-full shrink-0">
-              <StaticOsmMapBackdrop />
-              <div className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-[#1B2B22] px-3.5 py-2 text-xs font-semibold text-white shadow">
-                <IconMap size={14} />
-                Lihat Peta Penuh
+          <div className="flex h-[844px] w-[390px] flex-col overflow-hidden rounded-3xl border border-[#CBD5E1] bg-white shadow-lg">
+            <div className="border-b border-[#E2E5E2] px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-[#161E19]">[NAMA APP]</span>
+                <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">
+                  Langkah 1/3
+                </span>
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col rounded-t-2xl border-t border-[#E2E5E2] bg-white">
-              <div className="border-b border-[#E2E5E2] px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-[#161E19]">[NAMA APP]</span>
-                  <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">
-                    Langkah 3/3
-                  </span>
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <Step3StrategyTab
-                  discipline="road"
-                  profile={roadProfile}
-                  simulation={roadSim}
-                  onUpdateProfile={noop}
-                  onFocusSegment={noop}
-                  onOpenPrintModal={noop}
-                  onCopyWhatsApp={noop}
-                  copiedWa={false}
-                />
-              </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <Step1SetupDrawer
+                metadata={trailMeta}
+                weightKg={65}
+                pointCount={trailSample.points.length}
+                totalDistanceKm={trailDistanceKm}
+                totalGainM={trailTotals.gainM}
+                uploadError={null}
+                onUpdateMetadata={noop}
+                onChangeWeightKg={noop}
+                onUploadGpxFile={noop}
+                onLoadSampleRoute={noop}
+                onNextStep={noop}
+              />
             </div>
           </div>
         </section>
