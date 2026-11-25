@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { FigmaArtboardFlow } from "@/components/figma/FigmaArtboardFlow";
 
 export const metadata: Metadata = {
-  title: "[NAMA APP] - Figma Artboard Flow",
+  title: "Pe-Larian - Figma Artboard Flow",
   description: "Seluruh screen flow aplikasi untuk di-import ke Figma via html.to.design.",
 };
 

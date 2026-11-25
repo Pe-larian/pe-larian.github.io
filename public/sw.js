@@ -1,8 +1,9 @@
-const CACHE_NAME = "race-planner-pwa-v1";
-const BASE_PATH = self.location.pathname.startsWith("/web") ? "/web" : "";
+const CACHE_NAME = "pelarian-pwa-v2";
+const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, "");
 const SHELL_URLS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/manifest.webmanifest`,
+  `${BASE_PATH}/icons/logo-icon.svg`,
   `${BASE_PATH}/icons/icon-192.png`,
   `${BASE_PATH}/icons/icon-512.png`,
 ];

@@ -584,7 +584,7 @@ export function exportGpxXml(
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="RacePlannerWeb" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Pe-Larian" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${safeName}</name>
   </metadata>

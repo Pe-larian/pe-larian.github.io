@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconArrowLeft } from "@/components/Icons";
+import { BrandMarkPeLarian, IconArrowLeft } from "@/components/Icons";
 import { RouteMapCanvas } from "@/components/map/RouteMapCanvas";
 import { PrintCardModal } from "@/components/print/PrintCardModal";
 import { Step1SetupDrawer } from "@/components/steps/Step1SetupDrawer";
@@ -380,7 +380,21 @@ export function RacePlannerApp() {
     { num: 3 as const, label: "Strategi" },
   ];
 
+  // Close mobile fullscreen map or addCpMode when pressing Escape
+  useEffect(() => {
+    if (!mobileFullMap && !addCpMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !printModalOpen) {
+        if (addCpMode) setAddCpMode(false);
+        else if (mobileFullMap) setMobileFullMap(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileFullMap, addCpMode, printModalOpen]);
+
   // Mobile hides the map on Steps 1 & 2 (except fullscreen Add-CP mode triggered via "Klik di Peta").
+  // On Mobile Step 3, map becomes a slim 64px peek strip so the data drawer gets ~92% of the viewport.
   // Desktop retains split view across Steps 1, 2, and 3 unless addCpMode fullscreen is active.
   const hideMapOnMobile = (step === 1 || step === 2) && !addCpMode;
   const isMapFullscreen = addCpMode || (step === 3 && mobileFullMap);
@@ -396,7 +410,7 @@ export function RacePlannerApp() {
             ? "hidden"
             : isMapFullscreen
               ? "h-full"
-              : "h-[36dvh]"
+              : "h-[84px]"
         }`}
       >
         <RouteMapCanvas
@@ -420,7 +434,7 @@ export function RacePlannerApp() {
       {/* Main Drawer Panel (hidden during fullscreen addCpMode or mobileFullMap) */}
       <aside
         aria-label="Panel simulasi race"
-        className={`no-print fixed z-20 flex flex-col overflow-hidden bg-white shadow-[0_8px_28px_rgba(22,30,25,0.14)] ring-1 ring-[#E2E5E2] transition-all lg:bottom-4 lg:left-4 lg:top-4 lg:rounded-2xl ${
+        className={`no-print fixed z-20 flex flex-col overflow-hidden bg-white shadow-[0_-4px_24px_rgba(22,30,25,0.12)] ring-1 ring-[#E2E5E2] transition-all lg:bottom-4 lg:left-4 lg:top-4 lg:rounded-2xl lg:shadow-[0_8px_28px_rgba(22,30,25,0.14)] ${
           step === 3 ? "lg:w-[460px]" : "lg:w-[440px]"
         } ${
           addCpMode
@@ -429,7 +443,7 @@ export function RacePlannerApp() {
               ? "inset-0 rounded-none lg:inset-x-auto lg:top-4"
               : mobileFullMap
                 ? "pointer-events-none translate-y-[110%] lg:pointer-events-auto lg:translate-y-0"
-                : "inset-x-0 bottom-0 top-[34dvh] rounded-t-2xl lg:inset-x-auto lg:top-4"
+                : "inset-x-0 bottom-0 top-[64px] rounded-t-[20px] lg:inset-x-auto lg:top-4 lg:rounded-2xl"
         }`}
       >
         <header className="shrink-0 border-b border-[#E2E5E2] px-5 pb-3 pt-3.5">
@@ -449,8 +463,9 @@ export function RacePlannerApp() {
                   <IconArrowLeft size={16} />
                 </button>
               )}
-              <span className="text-xs font-extrabold tracking-wider text-[#161E19]">
-                [NAMA APP]
+              <BrandMarkPeLarian size={24} className="shrink-0" />
+              <span className="text-sm font-extrabold tracking-tight text-[#161E19]">
+                Pe-Larian
               </span>
             </div>
             <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">

@@ -200,6 +200,7 @@ export function RouteMapCanvas({
   const hoverMarkerRef = useRef<MapLibreMarker | null>(null);
   const draftMarkerRef = useRef<MapLibreMarker | null>(null);
   const addCpModeRef = useRef(addCpMode);
+  const mobileFullMapRef = useRef(mobileFullMap);
   const pointsRef = useRef(points);
 
   const [mapReady, setMapReady] = useState(false);
@@ -220,6 +221,7 @@ export function RouteMapCanvas({
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
 
   addCpModeRef.current = addCpMode;
+  mobileFullMapRef.current = mobileFullMap;
   pointsRef.current = points;
 
   const draftKm = useMemo(() => {
@@ -249,7 +251,27 @@ export function RouteMapCanvas({
   const latestGeoJsonRef = useRef(routeGeoJson);
   latestGeoJsonRef.current = routeGeoJson;
 
-  const fitRouteBounds = (map: MapLibreMap, pts: TrackPoint[], fullscreenMode = false) => {
+  const computeBoundsPadding = (isAddCp: boolean, isMobileFull: boolean) => {
+    if (isAddCp) {
+      return { top: 76, right: 68, bottom: 260, left: 48 };
+    }
+    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+    if (isDesktop) {
+      return { top: 72, right: 84, bottom: 80, left: 490 };
+    }
+    if (isMobileFull) {
+      return { top: 72, right: 64, bottom: 64, left: 36 };
+    }
+    // Slim 84px mobile peek strip above Step 3 focus-data drawer
+    return { top: 10, right: 148, bottom: 24, left: 16 };
+  };
+
+  const fitRouteBounds = (
+    map: MapLibreMap,
+    pts: TrackPoint[],
+    isAddCp = false,
+    isMobileFull = false
+  ) => {
     if (pts.length < 2) return;
     let minLon = Infinity;
     let maxLon = -Infinity;
@@ -261,19 +283,17 @@ export function RouteMapCanvas({
       if (p.lat < minLat) minLat = p.lat;
       if (p.lat > maxLat) maxLat = p.lat;
     }
-    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
-    const pad = fullscreenMode
-      ? { top: 76, right: 68, bottom: 260, left: 48 }
-      : isDesktop
-        ? { top: 72, right: 84, bottom: 80, left: 490 }
-        : { top: 44, right: 56, bottom: 52, left: 32 };
 
     map.fitBounds(
       [
         [minLon, minLat],
         [maxLon, maxLat],
       ],
-      { padding: pad, duration: 600, maxZoom: 15 }
+      {
+        padding: computeBoundsPadding(isAddCp, isMobileFull),
+        duration: 600,
+        maxZoom: 15,
+      }
     );
   };
 
@@ -308,7 +328,12 @@ export function RouteMapCanvas({
             | undefined;
           source?.setData?.(latestGeoJsonRef.current);
           if (pointsRef.current.length >= 2) {
-            fitRouteBounds(map, pointsRef.current, addCpModeRef.current);
+            fitRouteBounds(
+              map,
+              pointsRef.current,
+              addCpModeRef.current,
+              mobileFullMapRef.current
+            );
           }
         });
 
@@ -355,7 +380,7 @@ export function RouteMapCanvas({
     if (!map || !mapReady) return;
     const timer = setTimeout(() => {
       map.resize();
-      if (points.length >= 2) fitRouteBounds(map, points, addCpMode);
+      if (points.length >= 2) fitRouteBounds(map, points, addCpMode, mobileFullMap);
     }, 120);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,7 +424,7 @@ export function RouteMapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || points.length < 2) return;
-    fitRouteBounds(map, points, addCpMode);
+    fitRouteBounds(map, points, addCpMode, mobileFullMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeKey, mapReady]);
 
@@ -506,20 +531,18 @@ export function RouteMapCanvas({
     const minLat = Math.min(fromCp.lat, toCp.lat);
     const maxLat = Math.max(fromCp.lat, toCp.lat);
 
-    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
     map.fitBounds(
       [
         [minLon, minLat],
         [maxLon, maxLat],
       ],
       {
-        padding: isDesktop
-          ? { top: 90, right: 90, bottom: 90, left: 490 }
-          : { top: 44, right: 56, bottom: 52, left: 32 },
+        padding: computeBoundsPadding(addCpMode, mobileFullMap),
         duration: 550,
         maxZoom: 15,
       }
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedSegmentIndex, checkpoints, mapReady]);
 
   const handleSaveMapDraft = () => {
@@ -556,7 +579,11 @@ export function RouteMapCanvas({
 
   return (
     <div
-      className={`relative h-full w-full bg-[#E8EFE9] ${addCpMode ? "cursor-crosshair" : ""}`}
+      className={`relative h-full w-full bg-[#E8EFE9] ${addCpMode ? "cursor-crosshair" : ""} ${
+        !mobileFullMap && !addCpMode
+          ? "[&_.maplibregl-ctrl-bottom-right]:hidden lg:[&_.maplibregl-ctrl-bottom-right]:block"
+          : ""
+      }`}
       aria-label="Peta interaktif rute race"
     >
       <div ref={containerRef} className="h-full w-full" />
@@ -588,73 +615,80 @@ export function RouteMapCanvas({
             className="inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap rounded-full border border-[#E2E5E2] bg-white/95 px-3.5 text-xs font-semibold text-[#161E19] shadow-sm hover:bg-[#F5F5F3] lg:hidden"
           >
             <IconMap size={14} />
-            {mobileFullMap ? "Kembali ke Panel" : "Lihat Peta Penuh"}
+            {mobileFullMap ? "Kembali ke Data" : "Lihat Peta Penuh"}
           </button>
         )}
 
-        {/* Expandable Layer Switcher + Circular Toggle */}
-        <div className="flex items-center gap-1.5">
-          {layerMenuOpen && (
-            <div
-              className="flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-md"
-              role="group"
-              aria-label="Pilih tipe peta"
+        {/* Layer Switcher & Zoom Controls: hidden in slim 64px mobile peek strip, visible on desktop and fullscreen */}
+        <div
+          className={`${
+            mobileFullMap || addCpMode ? "flex" : "hidden lg:flex"
+          } flex-col items-end gap-2`}
+        >
+          {/* Expandable Layer Switcher + Circular Toggle */}
+          <div className="flex items-center gap-1.5">
+            {layerMenuOpen && (
+              <div
+                className="flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-md"
+                role="group"
+                aria-label="Pilih tipe peta"
+              >
+                {layerOptions.map((opt) => {
+                  const active = activeLayer === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onChangeLayer(opt.id);
+                        setLayerMenuOpen(false);
+                      }}
+                      aria-pressed={active}
+                      className={`min-h-[34px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
+                        active
+                          ? "bg-[#1B2B22] text-white"
+                          : "text-[#161E19] hover:bg-[#F5F5F3]"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setLayerMenuOpen((v) => !v)}
+              aria-expanded={layerMenuOpen}
+              aria-label="Pilih tipe peta (OSM, Topo, 3D, Satelit)"
+              className={`flex h-11 w-11 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm transition-colors ${
+                layerMenuOpen
+                  ? "border-[#1B2B22] bg-[#1B2B22] text-white"
+                  : "border-[#E2E5E2] bg-white/95 text-[#161E19] hover:bg-[#F5F5F3]"
+              }`}
             >
-              {layerOptions.map((opt) => {
-                const active = activeLayer === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      onChangeLayer(opt.id);
-                      setLayerMenuOpen(false);
-                    }}
-                    aria-pressed={active}
-                    className={`min-h-[34px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
-                      active
-                        ? "bg-[#1B2B22] text-white"
-                        : "text-[#161E19] hover:bg-[#F5F5F3]"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+              {shortLayerLabel(activeLayer)}
+            </button>
+          </div>
 
           <button
             type="button"
-            onClick={() => setLayerMenuOpen((v) => !v)}
-            aria-expanded={layerMenuOpen}
-            aria-label="Pilih tipe peta (OSM, Topo, 3D, Satelit)"
-            className={`flex h-11 w-11 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm transition-colors ${
-              layerMenuOpen
-                ? "border-[#1B2B22] bg-[#1B2B22] text-white"
-                : "border-[#E2E5E2] bg-white/95 text-[#161E19] hover:bg-[#F5F5F3]"
-            }`}
+            onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
+            aria-label="Perbesar peta"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
           >
-            {shortLayerLabel(activeLayer)}
+            <IconPlus size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
+            aria-label="Perkecil peta"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
+          >
+            <IconMinus size={18} />
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
-          aria-label="Perbesar peta"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
-        >
-          <IconPlus size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
-          aria-label="Perkecil peta"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
-        >
-          <IconMinus size={18} />
-        </button>
       </div>
 
       {/* Fullscreen Map CP Picker Overlay Mini-Drawer (stays open across Simpan CP until Selesai) */}
