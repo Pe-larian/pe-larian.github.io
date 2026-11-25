@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import {
+  BrandMarkPeLarian,
   IconArrowLeft,
   IconMap,
   IconMinus,
@@ -191,8 +192,9 @@ function DrawerShell({
                 <IconArrowLeft size={16} />
               </span>
             )}
-            <span className="text-xs font-extrabold tracking-wider text-[#161E19]">
-              [NAMA APP]
+            <BrandMarkPeLarian size={24} className="shrink-0" />
+            <span className="text-sm font-extrabold tracking-tight text-[#161E19]">
+              Pe-Larian
             </span>
           </div>
           <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">
@@ -364,12 +366,15 @@ export function FigmaArtboardFlow() {
   return (
     <div className="min-h-screen w-max bg-[#E5E7EB] p-12 text-[#161E19]">
       <div className="mb-8 rounded-2xl border border-[#D4DAD6] bg-white px-6 py-4">
-        <h1 className="text-lg font-bold text-[#161E19]">
-          [NAMA APP] · Figma Artboard Export (All Flows Updated)
-        </h1>
+        <div className="flex items-center gap-2.5">
+          <BrandMarkPeLarian size={28} />
+          <h1 className="text-lg font-bold text-[#161E19]">
+            Pe-Larian · Figma Artboard Export (All Flows Updated)
+          </h1>
+        </div>
         <p className="mt-1 text-sm text-[#525C56]">
           Gunakan plugin Figma <strong>html.to.design</strong> pada URL halaman ini untuk
-          meng-import ke-7 screen flow terbaru sekaligus sebagai frame Auto Layout.
+          meng-import ke-8 screen flow terbaru sekaligus sebagai frame Auto Layout.
         </p>
       </div>
 
@@ -548,7 +553,12 @@ export function FigmaArtboardFlow() {
           <div className="flex h-[844px] w-[390px] flex-col overflow-hidden rounded-3xl border border-[#CBD5E1] bg-white shadow-lg">
             <div className="border-b border-[#E2E5E2] px-4 py-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-[#161E19]">[NAMA APP]</span>
+                <div className="flex items-center gap-2">
+                  <BrandMarkPeLarian size={22} />
+                  <span className="text-sm font-extrabold tracking-tight text-[#161E19]">
+                    Pe-Larian
+                  </span>
+                </div>
                 <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">
                   Langkah 1/3
                 </span>
@@ -569,6 +579,114 @@ export function FigmaArtboardFlow() {
                 onLoadSampleRoute={noop}
                 onNextStep={noop}
               />
+            </div>
+          </div>
+        </section>
+
+        {/* Screen 08: Mobile Step 3 Focus Data (Slim 64px Map Strip + 92% Drawer) */}
+        <section>
+          <p className="mb-3 text-sm font-bold text-[#161E19]">
+            08 · Mobile Step 3 Fokus Data: Strip Peta 64px (390 x 844)
+          </p>
+          <div className="relative h-[844px] w-[390px] overflow-hidden rounded-3xl border border-[#CBD5E1] bg-[#E5ECE6] shadow-lg">
+            {/* Slim 84px map peek strip with single Lihat Peta Penuh pill */}
+            <div className="relative h-[84px] w-full overflow-hidden">
+              <div className="grid h-full w-full grid-cols-3 opacity-95">
+                {[3373, 3374, 3375].map((x) => (
+                  <img
+                    key={x}
+                    src={`https://tile.openstreetmap.org/12/${x}/2143.png`}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ))}
+              </div>
+              <svg
+                viewBox="0 0 390 84"
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                aria-hidden="true"
+              >
+                <path
+                  d="M 24 54 C 70 46, 108 26, 154 32 C 188 36, 210 24, 232 22"
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 24 54 C 70 46, 108 26, 154 32 C 188 36, 210 24, 232 22"
+                  fill="none"
+                  stroke="#1E6B3A"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute right-3 top-3">
+                <span className="inline-flex min-h-[38px] items-center gap-1.5 rounded-full border border-[#E2E5E2] bg-white/95 px-3.5 text-xs font-semibold text-[#161E19] shadow-sm">
+                  <IconMap size={14} />
+                  Lihat Peta Penuh
+                </span>
+              </div>
+            </div>
+
+            {/* 92% Focus-Data Drawer */}
+            <div className="absolute inset-x-0 bottom-0 top-[64px] flex flex-col overflow-hidden rounded-t-[20px] bg-white shadow-[0_-4px_24px_rgba(22,30,25,0.12)] ring-1 ring-[#E2E5E2]">
+              <header className="shrink-0 border-b border-[#E2E5E2] px-5 pb-3 pt-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[#161E19]">
+                      <IconArrowLeft size={16} />
+                    </span>
+                    <BrandMarkPeLarian size={22} />
+                    <span className="text-sm font-extrabold tracking-tight text-[#161E19]">
+                      Pe-Larian
+                    </span>
+                  </div>
+                  <span className="font-num rounded-full bg-[#F5F5F3] px-2.5 py-0.5 text-[11px] font-semibold text-[#525C56]">
+                    Langkah 3/3
+                  </span>
+                </div>
+                <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+                  <div className="flex min-h-[34px] items-center justify-center rounded-lg bg-[#EAF6F0] px-2 text-[11px] font-semibold text-[#146342]">
+                    1. Data &amp; GPX
+                  </div>
+                  <div className="flex min-h-[34px] items-center justify-center rounded-lg bg-[#EAF6F0] px-2 text-[11px] font-semibold text-[#146342]">
+                    2. Cek Rute
+                  </div>
+                  <div className="flex min-h-[34px] items-center justify-center rounded-lg bg-[#1B2B22] px-2 text-[11px] font-semibold text-white">
+                    3. Strategi
+                  </div>
+                </div>
+                <div className="mt-2.5 grid grid-cols-2 rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-1">
+                  <div className="flex min-h-[36px] items-center justify-center rounded-md bg-white px-2 text-xs font-semibold text-[#161E19] shadow-xs">
+                    Overview Rute
+                  </div>
+                  <div className="flex min-h-[36px] items-center justify-center rounded-md px-2 text-xs font-semibold text-[#525C56]">
+                    Pacing &amp; Fueling
+                  </div>
+                </div>
+              </header>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <Step3OverviewTab
+                  metadata={trailMeta}
+                  points={trailSample.points}
+                  checkpoints={trailSystemCps}
+                  simulation={trailSim}
+                  strategyGrouping="segments"
+                  onChangeStrategyGrouping={noop}
+                  systemSegmentCount={trailSystemCps.length - 1}
+                  customCheckpointCount={trailSample.checkpoints.length}
+                  weather={trailWeather}
+                  weatherLoading={false}
+                  hoveredPointIndex={null}
+                  onHoverPointIndex={noop}
+                  onFocusSegment={noop}
+                  onUploadGpxFile={noop}
+                  onExportGpx={noop}
+                  onSwitchToStrategyTab={noop}
+                  onOpenPrintModal={noop}
+                />
+              </div>
             </div>
           </div>
         </section>

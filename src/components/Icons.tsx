@@ -206,3 +206,28 @@ export function IconChevronDown({ size = 16, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function BrandMarkPeLarian({ size = 24, ...props }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="2" y="2" width="96" height="96" rx="22" fill="#1B2B22" />
+      <g transform="translate(50 50) skewX(-11) translate(-50 -50)">
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M25 18H56.5C69.8 18 77.5 25.4 77.5 37C77.5 48.6 69.8 56 56.5 56H40.5V82H25V18ZM40.5 28.5V43.8L47.8 35.4L51.8 40L56.8 33.4L62.6 42.4C64 40.8 64.8 38.9 64.8 36.8C64.8 31.6 61.5 28.5 55.5 28.5H40.5Z"
+          fill="#FFFFFF"
+        />
+        <rect x="46" y="71" width="20" height="11" rx="3" fill="#2FB364" />
+      </g>
+      <circle cx="74" cy="76.5" r="5.8" fill="#F09A36" />
+    </svg>
+  );
+}

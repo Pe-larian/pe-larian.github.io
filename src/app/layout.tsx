@@ -27,17 +27,18 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "[NAMA APP] - Perencana Rute, Pacing & Fueling Race",
+  title: "Pe-Larian - Perencana Rute, Pacing & Fueling Race",
   description:
     "Simulasi rute GPX, segmen checkpoint, pacing berbasis elevasi (Minetti GAP), prakiraan cuaca ketinggian, dan strategi nutrisi untuk pelari trail maupun road secara lokal di browser.",
   manifest: `${basePath}/manifest.webmanifest`,
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "[NAMA APP]",
+    title: "Pe-Larian",
   },
   icons: {
     icon: [
+      { url: `${basePath}/icons/logo-icon.svg`, type: "image/svg+xml" },
       { url: `${basePath}/icons/icon-192.png`, sizes: "192x192", type: "image/png" },
       { url: `${basePath}/icons/icon-512.png`, sizes: "512x512", type: "image/png" },
     ],

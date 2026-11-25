@@ -1,9 +1,9 @@
 {
-  "name": "[NAMA APP] - Race Pacing & Fueling Simulator",
-  "short_name": "[NAMA APP]",
+  "name": "Pe-Larian - Race Pacing & Fueling Simulator",
+  "short_name": "Pe-Larian",
   "description": "Simulasi rute GPX, segmen checkpoint, pacing berbasis elevasi, dan strategi nutrisi untuk pelari trail maupun road.",
-  "start_url": "/web/",
-  "scope": "/web/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#F5F5F3",
@@ -11,13 +11,13 @@
   "lang": "id",
   "icons": [
     {
-      "src": "/web/icons/icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/web/icons/icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
