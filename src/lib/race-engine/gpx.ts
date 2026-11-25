@@ -343,6 +343,81 @@ export function buildAutoCheckpoints(
   return all;
 }
 
+/**
+ * Generates system-divided route segments purely from distance and elevation profile,
+ * kept independent from user-edited custom checkpoints so users can switch freely.
+ */
+export function buildSystemSegmentsCheckpoints(
+  points: TrackPoint[],
+  discipline: RaceDiscipline
+): Checkpoint[] {
+  if (points.length < 2) return [];
+  const totalDistM = points[points.length - 1].distFromStartM;
+  const segmentCount =
+    totalDistM >= 40000 ? 5 : totalDistM >= 15000 ? 4 : totalDistM >= 4500 ? 3 : 2;
+
+  const startPt = points[0];
+  const finishPt = points[points.length - 1];
+  const nodes: Checkpoint[] = [
+    {
+      id: "sys-start",
+      name: "Start",
+      type: "start",
+      distM: 0,
+      pointIndex: 0,
+      lat: startPt.lat,
+      lon: startPt.lon,
+      ele: Math.round(startPt.ele),
+      plannedStopSec: 0,
+      terrainAfter: discipline === "road" ? "road" : "singletrack",
+      services: ["Start Gate"],
+    },
+  ];
+
+  for (let k = 1; k < segmentCount; k++) {
+    const targetDist = (totalDistM / segmentCount) * k;
+    const ptIdx = findTrackPointIndexAtDistance(points, targetDist);
+    const pt = points[ptIdx];
+    nodes.push({
+      id: `sys-seg-${k}`,
+      name: `KM ${(pt.distFromStartM / 1000).toFixed(1)}`,
+      type: "aid",
+      distM: pt.distFromStartM,
+      pointIndex: ptIdx,
+      lat: pt.lat,
+      lon: pt.lon,
+      ele: Math.round(pt.ele),
+      plannedStopSec: discipline === "road" ? 30 : 240,
+      terrainAfter: discipline === "road" ? "road" : "singletrack",
+      services: discipline === "road" ? ["Air", "Isotonik"] : ["Air", "Isotonik", "Makanan"],
+    });
+  }
+
+  nodes.push({
+    id: "sys-finish",
+    name: "Finish",
+    type: "finish",
+    distM: totalDistM,
+    pointIndex: points.length - 1,
+    lat: finishPt.lat,
+    lon: finishPt.lon,
+    ele: Math.round(finishPt.ele),
+    plannedStopSec: 0,
+    terrainAfter: discipline === "road" ? "road" : "singletrack",
+    services: ["Finish Line", "Medis"],
+  });
+
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = nodes[i];
+    const b = nodes[i + 1];
+    const dM = Math.max(1, b.distM - a.distM);
+    const avgGrade = ((b.ele - a.ele) / dM) * 100;
+    nodes[i].terrainAfter = inferTerrainFromGrade(avgGrade, discipline);
+  }
+
+  return nodes;
+}
+
 export interface ParsedGpxResult {
   name: string;
   points: TrackPoint[];

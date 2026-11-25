@@ -1,24 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import { ElevationProfileChart } from "@/components/chart/ElevationProfileChart";
 import {
-  IconAlert,
   IconArrowLeft,
   IconArrowRight,
-  IconCheck,
-  IconDownload,
-  IconMountain,
   IconPin,
   IconPlus,
   IconTrash,
-  IconUndo,
 } from "@/components/Icons";
 import { TERRAIN_LABELS } from "@/lib/race-engine/pacing";
 import type {
   Checkpoint,
-  GpxCleaningStats,
   RaceMetadata,
+  StrategyGroupingMode,
   TerrainCategory,
   TrackPoint,
 } from "@/lib/race-engine/types";
@@ -26,8 +20,10 @@ import type {
 interface Step2ConfirmDrawerProps {
   metadata: RaceMetadata;
   points: TrackPoint[];
-  checkpoints: Checkpoint[];
-  cleaningStats: GpxCleaningStats;
+  systemCheckpoints: Checkpoint[];
+  customCheckpoints: Checkpoint[];
+  strategyGrouping: StrategyGroupingMode;
+  onChangeStrategyGrouping: (mode: StrategyGroupingMode) => void;
   totalDistanceKm: number;
   totalGainM: number;
   totalLossM: number;
@@ -35,19 +31,12 @@ interface Step2ConfirmDrawerProps {
   onHoverPointIndex: (idx: number | null) => void;
   onFocusSegment: (segIdx: number) => void;
   onUpdateRaceName: (name: string) => void;
-  onUpdateCheckpoint: (id: string, patch: Partial<Checkpoint>) => void;
-  onDeleteCheckpoint: (id: string) => void;
+  onUpdateSystemCheckpoint: (id: string, patch: Partial<Checkpoint>) => void;
+  onUpdateCustomCheckpoint: (id: string, patch: Partial<Checkpoint>) => void;
+  onDeleteCustomCheckpoint: (id: string) => void;
   onAddCheckpointMidpoint: () => void;
   addCpMode: boolean;
   onToggleAddCpMode: () => void;
-  onCleanSpikes: () => void;
-  onSmoothChange: (windowSize: number) => void;
-  onCalibrateDem: () => void;
-  demLoading: boolean;
-  demMessage: { type: "ok" | "error"; text: string } | null;
-  canUndo: boolean;
-  onUndo: () => void;
-  onExportGpx: () => void;
   onBackStep: () => void;
   onGenerateStrategy: () => void;
 }
@@ -85,8 +74,10 @@ function computeSegmentStats(points: TrackPoint[], fromCp: Checkpoint, toCp: Che
 export function Step2ConfirmDrawer({
   metadata,
   points,
-  checkpoints,
-  cleaningStats,
+  systemCheckpoints,
+  customCheckpoints,
+  strategyGrouping,
+  onChangeStrategyGrouping,
   totalDistanceKm,
   totalGainM,
   totalLossM,
@@ -94,24 +85,18 @@ export function Step2ConfirmDrawer({
   onHoverPointIndex,
   onFocusSegment,
   onUpdateRaceName,
-  onUpdateCheckpoint,
-  onDeleteCheckpoint,
+  onUpdateSystemCheckpoint,
+  onUpdateCustomCheckpoint,
+  onDeleteCustomCheckpoint,
   onAddCheckpointMidpoint,
   addCpMode,
   onToggleAddCpMode,
-  onCleanSpikes,
-  onSmoothChange,
-  onCalibrateDem,
-  demLoading,
-  demMessage,
-  canUndo,
-  onUndo,
-  onExportGpx,
   onBackStep,
   onGenerateStrategy,
 }: Step2ConfirmDrawerProps) {
-  const [subTab, setSubTab] = useState<"segments" | "checkpoints">("segments");
-  const segmentCount = Math.max(0, checkpoints.length - 1);
+  const activeList =
+    strategyGrouping === "segments" ? systemCheckpoints : customCheckpoints;
+  const segmentCount = Math.max(0, systemCheckpoints.length - 1);
 
   return (
     <div className="flex h-full flex-col">
@@ -129,7 +114,7 @@ export function Step2ConfirmDrawer({
             className="w-full rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-base font-bold text-[#161E19] hover:border-[#E2E5E2] focus:border-[#1E6B3A] focus:bg-white"
           />
           <p className="px-1 text-[11px] text-[#525C56]">
-            Konfirmasi segmen, titik checkpoint, dan kualitas elevasi GPX sebelum simulasi.
+            Konfirmasi segmen, titik checkpoint, dan profil rute GPX sebelum simulasi.
           </p>
         </div>
 
@@ -161,10 +146,10 @@ export function Step2ConfirmDrawer({
           </div>
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wide text-[#525C56]">
-              Segmen
+              {strategyGrouping === "segments" ? "Segmen" : "Titik CP"}
             </p>
             <p className="font-num mt-0.5 text-sm font-bold text-[#161E19]">
-              {segmentCount}
+              {strategyGrouping === "segments" ? segmentCount : customCheckpoints.length}
             </p>
           </div>
         </div>
@@ -172,155 +157,62 @@ export function Step2ConfirmDrawer({
         {/* Compact elevation sparkline */}
         <ElevationProfileChart
           points={points}
-          checkpoints={checkpoints}
+          checkpoints={activeList}
           compact
           hoveredPointIndex={hoveredPointIndex}
           onHoverPointIndex={onHoverPointIndex}
         />
 
-        {/* GPX Cleaning & Elevation Quick Controls */}
-        <div className="rounded-xl border border-[#E2E5E2] bg-[#F5F5F3] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-[#161E19]">
-              Rapikan Data Rute & Elevasi
-            </span>
-            <span className="font-num text-[11px] text-[#525C56]">
-              Tanjakan awal +{cleaningStats.rawGainM} m
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] text-[#525C56]">
-            Bersihkan titik GPS yang melompat atau samakan tinggi jalur dengan peta satelit.
-          </p>
-
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={onCleanSpikes}
-              title="Hapus titik GPS atau elevasi yang tiba-tiba melompat tidak wajar"
-              className="inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
-            >
-              Hapus titik loncat
-              {cleaningStats.spikesDetected > 0 && (
-                <span className="font-num rounded bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
-                  {cleaningStats.spikesDetected}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={onCalibrateDem}
-              disabled={demLoading}
-              title="Sesuaikan ketinggian rute dengan data peta satelit agar hitungan tanjakan lebih akurat"
-              className="inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-50"
-            >
-              <IconMountain size={14} />
-              {demLoading ? "Memperbaiki..." : "Perbaiki elevasi"}
-            </button>
-
-            <button
-              type="button"
-              onClick={onUndo}
-              disabled={!canUndo}
-              aria-label="Batalkan perubahan terakhir"
-              className="inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] disabled:opacity-40"
-            >
-              <IconUndo size={14} />
-              Undo
-            </button>
-
-            <button
-              type="button"
-              onClick={onExportGpx}
-              className="inline-flex min-h-[36px] items-center gap-1 whitespace-nowrap rounded-lg border border-[#E2E5E2] bg-white px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED] lg:hidden"
-            >
-              <IconDownload size={14} />
-              Export .gpx
-            </button>
+        {/* Strategy Grouping Basis Selector */}
+        <div className="space-y-1.5">
+          <div>
+            <p className="text-xs font-bold text-[#161E19]">
+              Pilih basis pembagian strategi:
+            </p>
+            <p className="text-[11px] text-[#525C56]">
+              Segmen dibuat otomatis oleh sistem, sedangkan Checkpoints memakai titik CP yang Anda tentukan.
+            </p>
           </div>
 
-          <div className="mt-2.5 flex items-center gap-2.5">
-            <label
-              htmlFor="gpx-smooth-slider"
-              className="shrink-0 text-[11px] font-medium text-[#525C56]"
-            >
-              Haluskan elevasi
-            </label>
-            <input
-              id="gpx-smooth-slider"
-              type="range"
-              min={1}
-              max={9}
-              step={2}
-              value={cleaningStats.smoothingWindow}
-              onChange={(e) => onSmoothChange(Number(e.target.value))}
-              className="h-2 flex-1 accent-[#1E6B3A]"
-            />
-            <span className="font-num w-10 text-right text-[11px] font-semibold text-[#161E19]">
-              {cleaningStats.smoothingWindow === 1
-                ? "Asli"
-                : `${cleaningStats.smoothingWindow}pt`}
-            </span>
-          </div>
-
-          {demMessage && (
-            <div
-              role="status"
-              className={`mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] ${
-                demMessage.type === "ok"
-                  ? "bg-[#EAF6F0] text-[#146342]"
-                  : "bg-[#FEE2E2] text-[#991B1B]"
+          <div
+            className="grid grid-cols-2 rounded-xl border border-[#E2E5E2] bg-[#F5F5F3] p-1"
+            role="tablist"
+            aria-label="Basis pembagian strategi race"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={strategyGrouping === "segments"}
+              onClick={() => onChangeStrategyGrouping("segments")}
+              className={`min-h-[38px] rounded-lg text-xs font-semibold transition-colors ${
+                strategyGrouping === "segments"
+                  ? "bg-[#1B2B22] text-white"
+                  : "text-[#525C56] hover:text-[#161E19]"
               }`}
             >
-              {demMessage.type === "ok" ? (
-                <IconCheck size={13} className="mt-0.5 shrink-0" />
-              ) : (
-                <IconAlert size={13} className="mt-0.5 shrink-0" />
-              )}
-              <span>{demMessage.text}</span>
-            </div>
-          )}
+              Segmen ({segmentCount})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={strategyGrouping === "checkpoints"}
+              onClick={() => onChangeStrategyGrouping("checkpoints")}
+              className={`min-h-[38px] rounded-lg text-xs font-semibold transition-colors ${
+                strategyGrouping === "checkpoints"
+                  ? "bg-[#1B2B22] text-white"
+                  : "text-[#525C56] hover:text-[#161E19]"
+              }`}
+            >
+              Checkpoints ({customCheckpoints.length})
+            </button>
+          </div>
         </div>
 
-        {/* Sub-tabs: Segmen | Checkpoints */}
-        <div
-          className="grid grid-cols-2 rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-1"
-          role="tablist"
-          aria-label="Mode edit rute"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={subTab === "segments"}
-            onClick={() => setSubTab("segments")}
-            className={`min-h-[36px] rounded-md text-xs font-semibold transition-colors ${
-              subTab === "segments"
-                ? "bg-white text-[#161E19] shadow-xs"
-                : "text-[#525C56] hover:text-[#161E19]"
-            }`}
-          >
-            Segmen ({segmentCount})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={subTab === "checkpoints"}
-            onClick={() => setSubTab("checkpoints")}
-            className={`min-h-[36px] rounded-md text-xs font-semibold transition-colors ${
-              subTab === "checkpoints"
-                ? "bg-white text-[#161E19] shadow-xs"
-                : "text-[#525C56] hover:text-[#161E19]"
-            }`}
-          >
-            Checkpoints ({checkpoints.length})
-          </button>
-        </div>
-
-        {/* Tab content */}
-        {subTab === "segments" ? (
+        {/* Active Tab List */}
+        {strategyGrouping === "segments" ? (
           <div className="space-y-2">
-            {checkpoints.slice(0, -1).map((fromCp, idx) => {
-              const toCp = checkpoints[idx + 1];
+            {systemCheckpoints.slice(0, -1).map((fromCp, idx) => {
+              const toCp = systemCheckpoints[idx + 1];
               const stats = computeSegmentStats(points, fromCp, toCp);
               return (
                 <div
@@ -360,7 +252,7 @@ export function Step2ConfirmDrawer({
                       id={`terrain-${fromCp.id}`}
                       value={fromCp.terrainAfter}
                       onChange={(e) =>
-                        onUpdateCheckpoint(fromCp.id, {
+                        onUpdateSystemCheckpoint(fromCp.id, {
                           terrainAfter: e.target.value as TerrainCategory,
                         })
                       }
@@ -403,7 +295,7 @@ export function Step2ConfirmDrawer({
               </button>
             </div>
 
-            {checkpoints.map((cp, idx) => {
+            {customCheckpoints.map((cp, idx) => {
               const isEndpoint = cp.type === "start" || cp.type === "finish";
               const stopMinutes = Math.round(cp.plannedStopSec / 60);
               const cutoffHours =
@@ -430,7 +322,7 @@ export function Step2ConfirmDrawer({
                         value={cp.name}
                         aria-label={`Nama checkpoint ${idx + 1}`}
                         onChange={(e) =>
-                          onUpdateCheckpoint(cp.id, { name: e.target.value })
+                          onUpdateCustomCheckpoint(cp.id, { name: e.target.value })
                         }
                         className="min-h-[34px] min-w-0 flex-1 rounded-md border border-[#E2E5E2] px-2 text-xs font-semibold text-[#161E19] focus:border-[#1E6B3A]"
                       />
@@ -438,7 +330,7 @@ export function Step2ConfirmDrawer({
                     {!isEndpoint && (
                       <button
                         type="button"
-                        onClick={() => onDeleteCheckpoint(cp.id)}
+                        onClick={() => onDeleteCustomCheckpoint(cp.id)}
                         aria-label={`Hapus ${cp.name}`}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#991B1B] hover:bg-[#FEE2E2]"
                       >
@@ -470,7 +362,7 @@ export function Step2ConfirmDrawer({
                           value={stopMinutes}
                           onChange={(e) => {
                             const mins = Math.max(0, Number(e.target.value) || 0);
-                            onUpdateCheckpoint(cp.id, { plannedStopSec: mins * 60 });
+                            onUpdateCustomCheckpoint(cp.id, { plannedStopSec: mins * 60 });
                           }}
                           className="font-num mt-0.5 min-h-[34px] w-full rounded-md border border-[#8C948E] bg-white px-2 text-xs text-[#161E19] disabled:bg-[#F5F5F3]"
                         />
@@ -492,10 +384,12 @@ export function Step2ConfirmDrawer({
                           onChange={(e) => {
                             const raw = e.target.value;
                             if (raw === "") {
-                              onUpdateCheckpoint(cp.id, { cutoffElapsedSec: undefined });
+                              onUpdateCustomCheckpoint(cp.id, {
+                                cutoffElapsedSec: undefined,
+                              });
                             } else {
                               const hrs = Math.max(0.5, Number(raw) || 0);
-                              onUpdateCheckpoint(cp.id, {
+                              onUpdateCustomCheckpoint(cp.id, {
                                 cutoffElapsedSec: Math.round(hrs * 3600),
                               });
                             }

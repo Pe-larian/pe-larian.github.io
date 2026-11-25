@@ -2,15 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapLibreMap, Marker as MapLibreMarker } from "maplibre-gl";
-import {
-  IconDownload,
-  IconLocate,
-  IconMinus,
-  IconMountain,
-  IconPin,
-  IconPlus,
-  IconUndo,
-} from "@/components/Icons";
+import { IconMap, IconMinus, IconPin, IconPlus } from "@/components/Icons";
 import type { Checkpoint, MapLayerId, TrackPoint } from "@/lib/race-engine/types";
 
 interface RouteMapCanvasProps {
@@ -24,13 +16,8 @@ interface RouteMapCanvasProps {
   addCpMode: boolean;
   onToggleAddCpMode: () => void;
   onAddCheckpointAtLatLon: (lat: number, lon: number) => void;
-  onCleanSpikes: () => void;
-  spikesDetected: number;
-  onCalibrateDem: () => void;
-  demLoading: boolean;
-  canUndo: boolean;
-  onUndo: () => void;
-  onExportGpx: () => void;
+  mobileFullMap: boolean;
+  onToggleMobileFullMap: () => void;
 }
 
 function slopeBucketColor(gradePct: number): string {
@@ -65,10 +52,6 @@ function buildRouteGeoJson(points: TrackPoint[]) {
   };
 }
 
-/**
- * Single persistent MapLibre style containing all basemap layers and the race-route GeoJSON layer.
- * Switching basemaps only toggles layer visibility so the uploaded GPX route line is never wiped.
- */
 function buildPersistentMapStyle(
   initialLayer: MapLayerId,
   initialRouteData: ReturnType<typeof buildRouteGeoJson>
@@ -175,6 +158,13 @@ function buildPersistentMapStyle(
   };
 }
 
+function shortLayerLabel(layer: MapLayerId): string {
+  if (layer === "topo") return "Topo";
+  if (layer === "terrain3d") return "3D";
+  if (layer === "satellite") return "Sat";
+  return "OSM";
+}
+
 export function RouteMapCanvas({
   points,
   checkpoints,
@@ -186,13 +176,8 @@ export function RouteMapCanvas({
   addCpMode,
   onToggleAddCpMode,
   onAddCheckpointAtLatLon,
-  onCleanSpikes,
-  spikesDetected,
-  onCalibrateDem,
-  demLoading,
-  canUndo,
-  onUndo,
-  onExportGpx,
+  mobileFullMap,
+  onToggleMobileFullMap,
 }: RouteMapCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -204,7 +189,7 @@ export function RouteMapCanvas({
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
-  const [isTilted3D, setIsTilted3D] = useState(false);
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
 
   addCpModeRef.current = addCpMode;
   onAddCpRef.current = onAddCheckpointAtLatLon;
@@ -233,15 +218,14 @@ export function RouteMapCanvas({
       ],
       {
         padding: isDesktop
-          ? { top: 72, right: 84, bottom: 96, left: 480 }
-          : { top: 48, right: 40, bottom: 48, left: 40 },
+          ? { top: 72, right: 84, bottom: 80, left: 490 }
+          : { top: 44, right: 56, bottom: 52, left: 32 },
         duration: 600,
         maxZoom: 15,
       }
     );
   };
 
-  // Initialize MapLibre once on mount with persistent style
   useEffect(() => {
     let cancelled = false;
 
@@ -304,6 +288,18 @@ export function RouteMapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Resize map smoothly whenever mobile view switches or Step 1 -> Step 2 reveals the map
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const timer = setTimeout(() => {
+      map.resize();
+      if (points.length >= 2) fitRouteBounds(map, points);
+    }, 120);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, mobileFullMap, mapReady]);
+
   // Switch basemap visibility cleanly without wiping the GPX route source
   useEffect(() => {
     const map = mapRef.current;
@@ -322,15 +318,13 @@ export function RouteMapCanvas({
     if (activeLayer === "terrain3d") {
       map.setTerrain({ source: "terrarium", exaggeration: 1.35 });
       map.easeTo({ pitch: 52, duration: 500 });
-      setIsTilted3D(true);
     } else {
       map.setTerrain(null);
       map.easeTo({ pitch: 0, duration: 400 });
-      setIsTilted3D(false);
     }
   }, [activeLayer, mapReady]);
 
-  // Always update GeoJSON route line whenever points change (never gated on tile loading)
+  // Always update GeoJSON route line whenever points change
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
@@ -340,7 +334,6 @@ export function RouteMapCanvas({
     source?.setData?.(routeGeoJson);
   }, [routeGeoJson, mapReady]);
 
-  // Fit bounds when route changes (new upload or sample switch)
   const routeKey = `${points.length}-${points[0]?.lat.toFixed(5)}-${points[points.length - 1]?.lon.toFixed(5)}`;
   useEffect(() => {
     const map = mapRef.current;
@@ -349,7 +342,6 @@ export function RouteMapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeKey, mapReady]);
 
-  // Render checkpoint markers
   useEffect(() => {
     const map = mapRef.current;
     const mod = maplibreglRef.current;
@@ -391,7 +383,6 @@ export function RouteMapCanvas({
     });
   }, [checkpoints, mapReady]);
 
-  // Sync hover point marker with ElevationProfileChart
   useEffect(() => {
     const map = mapRef.current;
     const mod = maplibreglRef.current;
@@ -420,7 +411,6 @@ export function RouteMapCanvas({
     }
   }, [hoveredPointIndex, points, mapReady]);
 
-  // Fly to focused segment when user clicks a segment card
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || focusedSegmentIndex === null) return;
@@ -441,29 +431,13 @@ export function RouteMapCanvas({
       ],
       {
         padding: isDesktop
-          ? { top: 90, right: 90, bottom: 110, left: 490 }
-          : { top: 50, right: 40, bottom: 50, left: 40 },
+          ? { top: 90, right: 90, bottom: 90, left: 490 }
+          : { top: 44, right: 56, bottom: 52, left: 32 },
         duration: 550,
         maxZoom: 15,
       }
     );
   }, [focusedSegmentIndex, checkpoints, mapReady]);
-
-  const handleToggle3D = () => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (isTilted3D) {
-      map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
-      setIsTilted3D(false);
-    } else {
-      if (activeLayer !== "terrain3d") {
-        onChangeLayer("terrain3d");
-      } else {
-        map.easeTo({ pitch: 52, duration: 450 });
-        setIsTilted3D(true);
-      }
-    }
-  };
 
   const layerOptions: Array<{ id: MapLayerId; label: string }> = [
     { id: "osm", label: "OSM" },
@@ -486,52 +460,71 @@ export function RouteMapCanvas({
         </div>
       )}
 
-      {/* Top-right floating layer switcher */}
-      <div
-        className="no-print absolute right-3 top-3 z-20 flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-sm"
-        role="group"
-        aria-label="Pilih gaya peta"
-      >
-        {layerOptions.map((opt) => {
-          const active = activeLayer === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onChangeLayer(opt.id)}
-              aria-pressed={active}
-              className={`min-h-[36px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
-                active
-                  ? "bg-[#1B2B22] text-white"
-                  : "text-[#161E19] hover:bg-[#F5F5F3]"
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Right-edge circular map controls */}
-      <div className="no-print absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2">
+      {/* Top-right control cluster matching Section 1.pdf */}
+      <div className="no-print absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
+        {/* Mobile Full-Map Toggle Pill */}
         <button
           type="button"
-          onClick={handleToggle3D}
-          aria-label="Toggle tampilan 3D"
-          aria-pressed={isTilted3D}
-          className={`flex h-11 w-11 items-center justify-center rounded-full border text-xs font-bold shadow-sm transition-colors ${
-            isTilted3D
-              ? "border-[#1B2B22] bg-[#1B2B22] text-white"
-              : "border-[#E2E5E2] bg-white text-[#161E19] hover:bg-[#F5F5F3]"
-          }`}
+          onClick={onToggleMobileFullMap}
+          className="inline-flex min-h-[38px] items-center gap-1.5 whitespace-nowrap rounded-full border border-[#E2E5E2] bg-white/95 px-3.5 text-xs font-semibold text-[#161E19] shadow-sm hover:bg-[#F5F5F3] lg:hidden"
         >
-          3D
+          <IconMap size={14} />
+          {mobileFullMap ? "Kembali ke Panel" : "Lihat Peta Penuh"}
         </button>
+
+        {/* Expandable Layer Switcher + Circular Toggle */}
+        <div className="flex items-center gap-1.5">
+          {layerMenuOpen && (
+            <div
+              className="flex items-center gap-1 rounded-full border border-[#E2E5E2] bg-white/95 p-1 shadow-md"
+              role="group"
+              aria-label="Pilih tipe peta"
+            >
+              {layerOptions.map((opt) => {
+                const active = activeLayer === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      onChangeLayer(opt.id);
+                      setLayerMenuOpen(false);
+                    }}
+                    aria-pressed={active}
+                    className={`min-h-[34px] whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
+                      active
+                        ? "bg-[#1B2B22] text-white"
+                        : "text-[#161E19] hover:bg-[#F5F5F3]"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setLayerMenuOpen((v) => !v)}
+            aria-expanded={layerMenuOpen}
+            aria-label="Pilih tipe peta (OSM, Topo, 3D, Satelit)"
+            className={`flex h-11 w-11 items-center justify-center rounded-full border text-[11px] font-bold shadow-sm transition-colors ${
+              layerMenuOpen
+                ? "border-[#1B2B22] bg-[#1B2B22] text-white"
+                : "border-[#E2E5E2] bg-white/95 text-[#161E19] hover:bg-[#F5F5F3]"
+            }`}
+          >
+            {shortLayerLabel(activeLayer)}
+          </button>
+        </div>
+
+        {/* Zoom + / - Circular Controls */}
         <button
           type="button"
           onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
           aria-label="Perbesar peta"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
         >
           <IconPlus size={18} />
         </button>
@@ -539,108 +532,28 @@ export function RouteMapCanvas({
           type="button"
           onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
           aria-label="Perkecil peta"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white/95 text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
         >
           <IconMinus size={18} />
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (mapRef.current && points.length >= 2) {
-              fitRouteBounds(mapRef.current, points);
-            }
-          }}
-          aria-label="Pusatkan ke seluruh rute"
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E2E5E2] bg-white text-[#161E19] shadow-sm hover:bg-[#F5F5F3]"
-        >
-          <IconLocate size={18} />
-        </button>
       </div>
 
-      {/* Step 2 single-line full-width floating GPX editor toolbar */}
-      {step === 2 && (
-        <div className="no-print absolute bottom-4 left-[476px] right-16 z-20 hidden justify-center lg:flex">
-          <div className="flex w-max max-w-full items-center gap-1.5 overflow-x-auto whitespace-nowrap rounded-full border border-[#E2E5E2] bg-white/95 px-3 py-1.5 shadow-md">
-            <button
-              type="button"
-              onClick={onToggleAddCpMode}
-              aria-pressed={addCpMode}
-              className={`inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold transition-colors ${
-                addCpMode
-                  ? "bg-[#1E6B3A] text-white"
-                  : "text-[#161E19] hover:bg-[#F5F5F3]"
-              }`}
-            >
-              <IconPin size={14} />
-              {addCpMode ? "Klik rute di peta..." : "Tambah CP di Peta"}
-            </button>
-
-            <span className="h-5 w-px shrink-0 bg-[#E2E5E2]" aria-hidden="true" />
-
-            <button
-              type="button"
-              onClick={onCleanSpikes}
-              title="Hapus titik GPS atau elevasi yang tiba-tiba melompat tidak wajar"
-              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
-            >
-              Hapus titik loncat
-              {spikesDetected > 0 && (
-                <span className="font-num rounded-full bg-[#FDF3E3] px-1.5 py-0.5 text-[10px] font-bold text-[#8A4B00]">
-                  {spikesDetected}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={onCalibrateDem}
-              disabled={demLoading}
-              title="Sesuaikan ketinggian rute dengan data peta satelit agar hitungan tanjakan lebih akurat"
-              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-50"
-            >
-              <IconMountain size={14} />
-              {demLoading ? "Memperbaiki..." : "Perbaiki elevasi"}
-            </button>
-
-            <button
-              type="button"
-              onClick={onUndo}
-              disabled={!canUndo}
-              className="inline-flex min-h-[36px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3] disabled:opacity-40"
-            >
-              <IconUndo size={14} />
-              Undo
-            </button>
-
-            <span className="h-5 w-px shrink-0 bg-[#E2E5E2]" aria-hidden="true" />
-
-            <button
-              type="button"
-              onClick={onExportGpx}
-              className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#1B2B22] px-3.5 text-xs font-semibold text-white hover:bg-[#161E19]"
-            >
-              <IconDownload size={14} />
-              Export .gpx
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 3 compact slope legend over bottom-right map */}
-      {step === 3 && (
-        <div className="no-print absolute bottom-9 right-3 z-20 hidden items-center gap-3 rounded-full border border-[#E2E5E2] bg-white/95 px-3 py-1.5 text-[11px] font-medium text-[#161E19] shadow-sm sm:flex">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1E6B3A]" />
-            &lt;8%
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#D97706]" />
-            8-15%
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#B91C1C]" />
-            &gt;15%
-          </span>
+      {/* Bottom-right dark pill: Tambah CP di Peta (Step 2 & Step 3) */}
+      {step >= 2 && (
+        <div className="no-print absolute bottom-3 right-3 z-20">
+          <button
+            type="button"
+            onClick={onToggleAddCpMode}
+            aria-pressed={addCpMode}
+            className={`inline-flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-xs font-semibold shadow-md transition-colors ${
+              addCpMode
+                ? "bg-[#1E6B3A] text-white"
+                : "bg-[#1B2B22] text-white hover:bg-[#161E19]"
+            }`}
+          >
+            <IconPin size={14} />
+            {addCpMode ? "Klik rute di peta..." : "Tambah CP di Peta"}
+          </button>
         </div>
       )}
     </div>
