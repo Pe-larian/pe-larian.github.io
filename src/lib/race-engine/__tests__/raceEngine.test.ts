@@ -208,11 +208,16 @@ describe("Timezone auto-detection & static Open-Meteo adapter", () => {
     await expect(fetchDemElevations([])).rejects.toThrow(/1 sampai 100/);
   });
 
-  it("generates system segments independently from custom checkpoints and evaluates globalCutoffHours IF-ELSE", () => {
+  it("generates per-1KM segments for Road independently from custom checkpoints and evaluates globalCutoffHours IF-ELSE", () => {
     const roadSample = buildSampleRoute("road");
     const sysCps = buildSystemSegmentsCheckpoints(roadSample.points, "road");
-    expect(sysCps.length).toBeGreaterThanOrEqual(4);
+    const totalDistM = roadSample.points[roadSample.points.length - 1].distFromStartM;
+    const expectedKmSplits = Math.floor((totalDistM - 150) / 1000);
+    // Per-1KM Road segments: Start + KM 1..N + Finish
+    expect(sysCps.length).toBe(expectedKmSplits + 2);
     expect(sysCps[0].type).toBe("start");
+    expect(sysCps[1].name).toBe("KM 1");
+    expect(sysCps[1].terrainAfter).toBe("road");
     expect(sysCps[sysCps.length - 1].type).toBe("finish");
 
     const forecast = buildClimateFallbackForecast(

@@ -19,6 +19,7 @@ interface Step1SetupDrawerProps {
   totalGainM: number;
   uploadError: string | null;
   onUpdateMetadata: (patch: Partial<RaceMetadata>) => void;
+  onSwitchDiscipline: (discipline: RaceDiscipline) => void;
   onChangeWeightKg: (kg: number) => void;
   onUploadGpxFile: (file: File) => void;
   onLoadSampleRoute: (discipline: RaceDiscipline) => void;
@@ -39,6 +40,7 @@ export function Step1SetupDrawer({
   totalGainM,
   uploadError,
   onUpdateMetadata,
+  onSwitchDiscipline,
   onChangeWeightKg,
   onUploadGpxFile,
   onLoadSampleRoute,
@@ -98,10 +100,7 @@ export function Step1SetupDrawer({
   };
 
   const handleDisciplineSwitch = (nextDiscipline: RaceDiscipline) => {
-    onUpdateMetadata({ discipline: nextDiscipline });
-    if (metadata.isSample) {
-      onLoadSampleRoute(nextDiscipline);
-    }
+    onSwitchDiscipline(nextDiscipline);
   };
 
   return (

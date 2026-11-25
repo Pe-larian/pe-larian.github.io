@@ -5,14 +5,17 @@ import { IconArrowLeft } from "@/components/Icons";
 import { RouteMapCanvas } from "@/components/map/RouteMapCanvas";
 import { PrintCardModal } from "@/components/print/PrintCardModal";
 import { Step1SetupDrawer } from "@/components/steps/Step1SetupDrawer";
-import { Step2ConfirmDrawer } from "@/components/steps/Step2ConfirmDrawer";
+import {
+  type AddCheckpointPayload,
+  Step2ConfirmDrawer,
+} from "@/components/steps/Step2ConfirmDrawer";
 import { Step3OverviewTab } from "@/components/steps/Step3OverviewTab";
 import { Step3StrategyTab } from "@/components/steps/Step3StrategyTab";
 import {
   buildSystemSegmentsCheckpoints,
   computeElevationTotals,
   exportGpxXml,
-  findNearestTrackPointIndex,
+  findTrackPointIndexAtDistance,
   parseGpxXml,
 } from "@/lib/race-engine/gpx";
 import { fetchRaceWeatherForecast } from "@/lib/race-engine/openMeteoClient";
@@ -215,6 +218,35 @@ export function RacePlannerApp() {
     }));
   }, []);
 
+  const handleSwitchDiscipline = useCallback(
+    (nextDiscipline: RaceDiscipline) => {
+      if (metadata.isSample) {
+        handleLoadSampleRoute(nextDiscipline);
+        return;
+      }
+
+      setMetadata((prev) => ({ ...prev, discipline: nextDiscipline }));
+      setSystemCheckpoints(buildSystemSegmentsCheckpoints(points, nextDiscipline));
+      setCustomCheckpoints((prev) =>
+        prev.map((cp) => ({
+          ...cp,
+          terrainAfter: nextDiscipline === "road" ? "road" : "singletrack",
+          plannedStopSec:
+            cp.type === "start" || cp.type === "finish"
+              ? 0
+              : nextDiscipline === "road"
+                ? 45
+                : 300,
+        }))
+      );
+      setProfile((prev) => ({
+        ...prev,
+        targetFinishTimeSec: undefined,
+      }));
+    },
+    [metadata.isSample, points, handleLoadSampleRoute]
+  );
+
   const handleUploadGpxFile = useCallback(
     async (file: File) => {
       setUploadError(null);
@@ -276,56 +308,36 @@ export function RacePlannerApp() {
     setCustomCheckpoints((prev) => prev.filter((cp) => cp.id !== id));
   }, []);
 
-  const handleAddCheckpointAtIndex = useCallback(
-    (ptIdx: number) => {
+  const handleAddCheckpointByKm = useCallback(
+    (payload: AddCheckpointPayload) => {
+      if (points.length < 2) return;
+      const ptIdx = findTrackPointIndexAtDistance(points, payload.distanceKm * 1000);
       const pt = points[ptIdx];
       if (!pt) return;
+
       const newCp: Checkpoint = {
-        id: `cp-custom-${Date.now()}`,
-        name: `CP Baru (${(pt.distFromStartM / 1000).toFixed(1)} km)`,
-        type: "aid",
+        id: `cp-custom-${Date.now()}-${Math.round(pt.distFromStartM)}`,
+        name: payload.name,
+        type: metadata.discipline === "road" ? "water" : "aid",
         distM: pt.distFromStartM,
         pointIndex: ptIdx,
         lat: pt.lat,
         lon: pt.lon,
         ele: Math.round(pt.ele),
-        plannedStopSec: metadata.discipline === "road" ? 45 : 300,
+        plannedStopSec: Math.max(0, payload.stopMinutes) * 60,
+        cutoffElapsedSec:
+          payload.cutoffHours !== undefined && payload.cutoffHours > 0
+            ? Math.round(payload.cutoffHours * 3600)
+            : undefined,
         terrainAfter: metadata.discipline === "road" ? "road" : "singletrack",
         services: ["Air", "Isotonik"],
       };
+
       setCustomCheckpoints((prev) => [...prev, newCp].sort((a, b) => a.distM - b.distM));
       setStrategyGrouping("checkpoints");
-      setAddCpMode(false);
     },
     [points, metadata.discipline]
   );
-
-  const handleAddCheckpointAtLatLon = useCallback(
-    (lat: number, lon: number) => {
-      const idx = findNearestTrackPointIndex(points, lat, lon);
-      handleAddCheckpointAtIndex(idx);
-    },
-    [points, handleAddCheckpointAtIndex]
-  );
-
-  const handleAddCheckpointMidpoint = useCallback(() => {
-    if (customCheckpoints.length < 2 || points.length < 4) return;
-    let longestIdx = 0;
-    let longestSpan = -1;
-    for (let i = 0; i < customCheckpoints.length - 1; i++) {
-      const span = customCheckpoints[i + 1].pointIndex - customCheckpoints[i].pointIndex;
-      if (span > longestSpan) {
-        longestSpan = span;
-        longestIdx = i;
-      }
-    }
-    const midPtIdx = Math.floor(
-      (customCheckpoints[longestIdx].pointIndex +
-        customCheckpoints[longestIdx + 1].pointIndex) /
-        2
-    );
-    handleAddCheckpointAtIndex(midPtIdx);
-  }, [customCheckpoints, points.length, handleAddCheckpointAtIndex]);
 
   const handleExportGpx = useCallback(() => {
     const xml = exportGpxXml(metadata.raceName, points, activeCheckpoints);
@@ -368,16 +380,21 @@ export function RacePlannerApp() {
     { num: 3 as const, label: "Strategi" },
   ];
 
-  const hideMapOnMobile = step === 1;
+  // Mobile hides the map on Steps 1 & 2 (except fullscreen Add-CP mode triggered via "Klik di Peta").
+  // Desktop retains split view across Steps 1, 2, and 3 unless addCpMode fullscreen is active.
+  const hideMapOnMobile = (step === 1 || step === 2) && !addCpMode;
+  const isMapFullscreen = addCpMode || (step === 3 && mobileFullMap);
+  const hideIntermediateMarkers =
+    strategyGrouping === "segments" && systemCheckpoints.length > 8;
 
   return (
     <main className="relative h-dvh w-screen overflow-hidden bg-[#F5F5F3]">
-      {/* Map Canvas: Hidden on Mobile Step 1; always full-bleed on Desktop */}
+      {/* Map Canvas */}
       <div
         className={`no-print absolute inset-x-0 top-0 z-0 lg:inset-0 lg:block lg:h-full ${
           hideMapOnMobile
             ? "hidden"
-            : mobileFullMap
+            : isMapFullscreen
               ? "h-full"
               : "h-[36dvh]"
         }`}
@@ -385,30 +402,34 @@ export function RacePlannerApp() {
         <RouteMapCanvas
           points={points}
           checkpoints={activeCheckpoints}
+          discipline={metadata.discipline}
+          hideIntermediateMarkers={hideIntermediateMarkers}
           step={step}
           activeLayer={activeLayer}
           onChangeLayer={setActiveLayer}
           hoveredPointIndex={hoveredPointIndex}
           focusedSegmentIndex={focusedSegmentIndex}
           addCpMode={addCpMode}
-          onToggleAddCpMode={() => setAddCpMode((v) => !v)}
-          onAddCheckpointAtLatLon={handleAddCheckpointAtLatLon}
+          onExitAddCpMode={() => setAddCpMode(false)}
+          onSaveCheckpointFromMap={handleAddCheckpointByKm}
           mobileFullMap={mobileFullMap}
           onToggleMobileFullMap={() => setMobileFullMap((v) => !v)}
         />
       </div>
 
-      {/* Drawer Panel: Full-screen on Mobile Step 1, Bottom Sheet on Mobile Step 2-3, Floating Left on Desktop */}
+      {/* Main Drawer Panel (hidden during fullscreen addCpMode or mobileFullMap) */}
       <aside
         aria-label="Panel simulasi race"
-        className={`no-print fixed z-20 flex flex-col overflow-hidden bg-white shadow-[0_8px_28px_rgba(22,30,25,0.14)] ring-1 ring-[#E2E5E2] transition-transform lg:bottom-4 lg:left-4 lg:top-4 lg:rounded-2xl ${
+        className={`no-print fixed z-20 flex flex-col overflow-hidden bg-white shadow-[0_8px_28px_rgba(22,30,25,0.14)] ring-1 ring-[#E2E5E2] transition-all lg:bottom-4 lg:left-4 lg:top-4 lg:rounded-2xl ${
           step === 3 ? "lg:w-[460px]" : "lg:w-[440px]"
         } ${
-          hideMapOnMobile
-            ? "inset-0 rounded-none lg:inset-x-auto lg:top-4"
-            : mobileFullMap
-              ? "pointer-events-none translate-y-[110%] lg:pointer-events-auto lg:translate-y-0"
-              : "inset-x-0 bottom-0 top-[34dvh] rounded-t-2xl lg:inset-x-auto lg:top-4"
+          addCpMode
+            ? "pointer-events-none translate-y-[110%] opacity-0 lg:-translate-x-[110%] lg:translate-y-0"
+            : hideMapOnMobile
+              ? "inset-0 rounded-none lg:inset-x-auto lg:top-4"
+              : mobileFullMap
+                ? "pointer-events-none translate-y-[110%] lg:pointer-events-auto lg:translate-y-0"
+                : "inset-x-0 bottom-0 top-[34dvh] rounded-t-2xl lg:inset-x-auto lg:top-4"
         }`}
       >
         <header className="shrink-0 border-b border-[#E2E5E2] px-5 pb-3 pt-3.5">
@@ -419,6 +440,7 @@ export function RacePlannerApp() {
                   type="button"
                   onClick={() => {
                     setMobileFullMap(false);
+                    setAddCpMode(false);
                     setStep((s) => (s === 3 ? 2 : 1));
                   }}
                   aria-label="Langkah sebelumnya"
@@ -436,7 +458,7 @@ export function RacePlannerApp() {
             </span>
           </div>
 
-          {/* 3-Step Indicator Bar (Strict Stepper Lock: cannot jump ahead) */}
+          {/* Locked Stepper Bar */}
           <nav aria-label="Tahapan simulasi" className="mt-2.5 grid grid-cols-3 gap-1.5">
             {stepLabels.map((s) => {
               const active = step === s.num;
@@ -450,6 +472,7 @@ export function RacePlannerApp() {
                   onClick={() => {
                     if (locked) return;
                     setMobileFullMap(false);
+                    setAddCpMode(false);
                     setStep(s.num);
                   }}
                   aria-current={active ? "step" : undefined}
@@ -471,7 +494,6 @@ export function RacePlannerApp() {
             })}
           </nav>
 
-          {/* Step 3 Dual-Tab Switcher */}
           {step === 3 && (
             <div
               className="mt-2.5 grid grid-cols-2 rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] p-1"
@@ -518,12 +540,14 @@ export function RacePlannerApp() {
               totalGainM={totals.gainM}
               uploadError={uploadError}
               onUpdateMetadata={(patch) => setMetadata((prev) => ({ ...prev, ...patch }))}
+              onSwitchDiscipline={handleSwitchDiscipline}
               onChangeWeightKg={(kg) => setProfile((prev) => ({ ...prev, weightKg: kg }))}
               onUploadGpxFile={handleUploadGpxFile}
               onLoadSampleRoute={handleLoadSampleRoute}
               onNextStep={() => {
                 setMaxUnlockedStep((prev) => (prev < 2 ? 2 : prev));
                 setMobileFullMap(false);
+                setAddCpMode(false);
                 setStep(2);
               }}
             />
@@ -549,16 +573,20 @@ export function RacePlannerApp() {
               onUpdateSystemCheckpoint={handleUpdateSystemCheckpoint}
               onUpdateCustomCheckpoint={handleUpdateCustomCheckpoint}
               onDeleteCustomCheckpoint={handleDeleteCustomCheckpoint}
-              onAddCheckpointMidpoint={handleAddCheckpointMidpoint}
-              addCpMode={addCpMode}
-              onToggleAddCpMode={() => setAddCpMode((v) => !v)}
+              onAddCheckpointByKm={handleAddCheckpointByKm}
+              onOpenFullscreenMapPicker={() => {
+                setStrategyGrouping("checkpoints");
+                setAddCpMode(true);
+              }}
               onBackStep={() => {
                 setMobileFullMap(false);
+                setAddCpMode(false);
                 setStep(1);
               }}
               onGenerateStrategy={() => {
                 setMaxUnlockedStep(3);
                 setMobileFullMap(false);
+                setAddCpMode(false);
                 setStep(3);
                 setStep3Tab("overview");
               }}
