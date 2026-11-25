@@ -56,6 +56,12 @@ export default function RootLayout({
       <body className="bg-[#F5F5F3] text-[#161E19] antialiased selection:bg-[#1E6B3A]/15 selection:text-[#161E19]">
         <PwaRegister />
         {children}
+        {/* Cloudflare Web Analytics */}
+        <script
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "8fb431c976b240fb8b9cc86f5cbb86d1"}'
+        />
       </body>
     </html>
   );
