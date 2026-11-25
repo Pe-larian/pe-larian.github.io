@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { ElevationProfileChart } from "@/components/chart/ElevationProfileChart";
 import {
   IconArrowLeft,
@@ -8,6 +9,7 @@ import {
   IconPlus,
   IconTrash,
 } from "@/components/Icons";
+import { findTrackPointIndexAtDistance } from "@/lib/race-engine/gpx";
 import { TERRAIN_LABELS } from "@/lib/race-engine/pacing";
 import type {
   Checkpoint,
@@ -16,6 +18,13 @@ import type {
   TerrainCategory,
   TrackPoint,
 } from "@/lib/race-engine/types";
+
+export interface AddCheckpointPayload {
+  distanceKm: number;
+  name: string;
+  stopMinutes: number;
+  cutoffHours?: number;
+}
 
 interface Step2ConfirmDrawerProps {
   metadata: RaceMetadata;
@@ -34,9 +43,8 @@ interface Step2ConfirmDrawerProps {
   onUpdateSystemCheckpoint: (id: string, patch: Partial<Checkpoint>) => void;
   onUpdateCustomCheckpoint: (id: string, patch: Partial<Checkpoint>) => void;
   onDeleteCustomCheckpoint: (id: string) => void;
-  onAddCheckpointMidpoint: () => void;
-  addCpMode: boolean;
-  onToggleAddCpMode: () => void;
+  onAddCheckpointByKm: (payload: AddCheckpointPayload) => void;
+  onOpenFullscreenMapPicker: () => void;
   onBackStep: () => void;
   onGenerateStrategy: () => void;
 }
@@ -88,15 +96,69 @@ export function Step2ConfirmDrawer({
   onUpdateSystemCheckpoint,
   onUpdateCustomCheckpoint,
   onDeleteCustomCheckpoint,
-  onAddCheckpointMidpoint,
-  addCpMode,
-  onToggleAddCpMode,
+  onAddCheckpointByKm,
+  onOpenFullscreenMapPicker,
   onBackStep,
   onGenerateStrategy,
 }: Step2ConfirmDrawerProps) {
   const activeList =
     strategyGrouping === "segments" ? systemCheckpoints : customCheckpoints;
   const segmentCount = Math.max(0, systemCheckpoints.length - 1);
+
+  const minKm = 0.1;
+  const maxKm = Math.max(0.2, Number((totalDistanceKm - 0.1).toFixed(1)));
+  const defaultMidKm = Number((totalDistanceKm / 2).toFixed(1));
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [distDraft, setDistDraft] = useState(String(defaultMidKm));
+  const [cpNameDraft, setCpNameDraft] = useState("");
+  const [stopMinDraft, setStopMinDraft] = useState(
+    metadata.discipline === "road" ? "1" : "5"
+  );
+  const [cotHourDraft, setCotHourDraft] = useState("");
+
+  const parsedDistKm = useMemo(() => {
+    const n = Number(distDraft.replace(",", "."));
+    if (!Number.isFinite(n)) return defaultMidKm;
+    return Math.max(minKm, Math.min(maxKm, n));
+  }, [distDraft, defaultMidKm, minKm, maxKm]);
+
+  const previewEleM = useMemo(() => {
+    if (points.length === 0) return 0;
+    const idx = findTrackPointIndexAtDistance(points, parsedDistKm * 1000);
+    return Math.round(points[idx]?.ele ?? 0);
+  }, [points, parsedDistKm]);
+
+  const openAddForm = () => {
+    const startKm = Number(Math.max(minKm, Math.min(maxKm, totalDistanceKm / 2)).toFixed(1));
+    setDistDraft(String(startKm));
+    setCpNameDraft("");
+    setStopMinDraft(metadata.discipline === "road" ? "1" : "5");
+    setCotHourDraft("");
+    setShowAddForm(true);
+  };
+
+  const handleSaveInlineCp = () => {
+    const stopNum = Math.max(0, Math.min(120, Math.round(Number(stopMinDraft) || 0)));
+    const cotNorm = Number(cotHourDraft.replace(",", "."));
+    const cutoffHours =
+      cotHourDraft.trim() !== "" && Number.isFinite(cotNorm) && cotNorm > 0
+        ? cotNorm
+        : undefined;
+    const cleanName =
+      cpNameDraft.trim() ||
+      (metadata.discipline === "road"
+        ? `WS (${parsedDistKm.toFixed(1)} km)`
+        : `CP (${parsedDistKm.toFixed(1)} km)`);
+
+    onAddCheckpointByKm({
+      distanceKm: parsedDistKm,
+      name: cleanName,
+      stopMinutes: stopNum,
+      cutoffHours,
+    });
+    setShowAddForm(false);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -114,7 +176,7 @@ export function Step2ConfirmDrawer({
             className="w-full rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-base font-bold text-[#161E19] hover:border-[#E2E5E2] focus:border-[#1E6B3A] focus:bg-white"
           />
           <p className="px-1 text-[11px] text-[#525C56]">
-            Konfirmasi segmen, titik checkpoint, dan profil rute GPX sebelum simulasi.
+            Konfirmasi pembagian segmen dan titik checkpoint sebelum generate strategi.
           </p>
         </div>
 
@@ -170,7 +232,9 @@ export function Step2ConfirmDrawer({
               Pilih basis pembagian strategi:
             </p>
             <p className="text-[11px] text-[#525C56]">
-              Segmen dibuat otomatis oleh sistem, sedangkan Checkpoints memakai titik CP yang Anda tentukan.
+              {metadata.discipline === "road"
+                ? "Segmen otomatis dibagi per 1 KM, sedangkan Checkpoints untuk titik Water Station / CP pilihan Anda."
+                : "Segmen dibuat otomatis oleh sistem, sedangkan Checkpoints memakai titik CP yang Anda tentukan."}
             </p>
           </div>
 
@@ -271,29 +335,156 @@ export function Step2ConfirmDrawer({
           </div>
         ) : (
           <div className="space-y-2.5">
-            <div className="flex flex-wrap gap-1.5">
+            {/* Drawer-only CP Action Buttons */}
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={onAddCheckpointMidpoint}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
-              >
-                <IconPlus size={14} />
-                Tambah CP
-              </button>
-              <button
-                type="button"
-                onClick={onToggleAddCpMode}
-                aria-pressed={addCpMode}
-                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold ${
-                  addCpMode
-                    ? "border-[#1E6B3A] bg-[#1E6B3A] text-white"
+                onClick={() => (showAddForm ? setShowAddForm(false) : openAddForm())}
+                aria-expanded={showAddForm}
+                className={`inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors ${
+                  showAddForm
+                    ? "border-[#1B2B22] bg-[#1B2B22] text-white"
                     : "border-[#8C948E] bg-white text-[#161E19] hover:bg-[#F5F5F3]"
                 }`}
               >
+                <IconPlus size={14} />
+                Tambah CP (Jarak KM)
+              </button>
+              <button
+                type="button"
+                onClick={onOpenFullscreenMapPicker}
+                className="inline-flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#1E6B3A] bg-[#EAF6F0] px-3 text-xs font-semibold text-[#146342] hover:bg-[#DCF0E5]"
+              >
                 <IconPin size={14} />
-                {addCpMode ? "Klik peta aktif" : "Klik di Peta"}
+                Klik di Peta
               </button>
             </div>
+
+            {/* Inline Distance-Based CP Creator Card */}
+            {showAddForm && (
+              <div className="space-y-3 rounded-xl border border-[#1E6B3A] bg-[#F5F8F6] p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-bold text-[#161E19]">
+                    Tambah Checkpoint di Jarak Tertentu
+                  </p>
+                  <span className="font-num text-[11px] font-semibold text-[#146342]">
+                    {previewEleM} mdpl
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <label htmlFor="add-cp-km" className="font-semibold text-[#161E19]">
+                      Jarak dari Start (KM)
+                    </label>
+                    <span className="font-num text-[#525C56]">
+                      0.1 - {maxKm.toFixed(1)} km
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      id="add-cp-km"
+                      type="text"
+                      inputMode="decimal"
+                      value={distDraft}
+                      onChange={(e) =>
+                        setDistDraft(e.target.value.replace(/[^0-9.,]/g, ""))
+                      }
+                      onBlur={() => setDistDraft(parsedDistKm.toFixed(1))}
+                      className="font-num min-h-[38px] w-24 shrink-0 rounded-lg border border-[#8C948E] bg-white px-2.5 text-center text-xs font-bold text-[#161E19]"
+                    />
+                    <input
+                      aria-label="Geser jarak CP dalam KM"
+                      type="range"
+                      min={minKm}
+                      max={maxKm}
+                      step={0.1}
+                      value={parsedDistKm}
+                      onChange={(e) => setDistDraft(Number(e.target.value).toFixed(1))}
+                      className="h-2.5 w-full accent-[#1E6B3A]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="add-cp-name"
+                    className="block text-[11px] font-semibold text-[#161E19]"
+                  >
+                    Nama CP / Water Station
+                  </label>
+                  <input
+                    id="add-cp-name"
+                    type="text"
+                    value={cpNameDraft}
+                    onChange={(e) => setCpNameDraft(e.target.value)}
+                    placeholder={
+                      metadata.discipline === "road"
+                        ? `Contoh: WS (${parsedDistKm.toFixed(1)} km)`
+                        : `Contoh: Pos Air (${parsedDistKm.toFixed(1)} km)`
+                    }
+                    className="mt-1 min-h-[38px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs text-[#161E19]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label
+                      htmlFor="add-cp-stop"
+                      className="block text-[11px] font-semibold text-[#161E19]"
+                    >
+                      Stop aid (menit)
+                    </label>
+                    <input
+                      id="add-cp-stop"
+                      type="text"
+                      inputMode="numeric"
+                      value={stopMinDraft}
+                      onChange={(e) =>
+                        setStopMinDraft(e.target.value.replace(/[^0-9]/g, ""))
+                      }
+                      className="font-num mt-1 min-h-[38px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs text-[#161E19]"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="add-cp-cot"
+                      className="block text-[11px] font-semibold text-[#161E19]"
+                    >
+                      COT (jam dr start)
+                    </label>
+                    <input
+                      id="add-cp-cot"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Opsional"
+                      value={cotHourDraft}
+                      onChange={(e) =>
+                        setCotHourDraft(e.target.value.replace(/[^0-9.,]/g, ""))
+                      }
+                      className="font-num mt-1 min-h-[38px] w-full rounded-lg border border-[#8C948E] bg-white px-2.5 text-xs text-[#161E19]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="min-h-[40px] flex-1 rounded-lg border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveInlineCp}
+                    className="min-h-[40px] flex-1 rounded-lg bg-[#1B2B22] px-3 text-xs font-semibold text-white hover:bg-[#161E19]"
+                  >
+                    Simpan CP
+                  </button>
+                </div>
+              </div>
+            )}
 
             {customCheckpoints.map((cp, idx) => {
               const isEndpoint = cp.type === "start" || cp.type === "finish";

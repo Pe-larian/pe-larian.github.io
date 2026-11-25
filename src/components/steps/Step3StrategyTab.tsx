@@ -5,22 +5,18 @@ import { RoadPaceStrategyChart } from "@/components/chart/RoadPaceStrategyChart"
 import {
   IconAlert,
   IconCheck,
-  IconChevronDown,
   IconCopy,
   IconMinus,
   IconPlus,
   IconPrint,
-  IconSliders,
 } from "@/components/Icons";
 import { formatDuration, formatPace } from "@/lib/race-engine/pacing";
 import type {
-  GutTolerance,
   RaceDiscipline,
   RaceSimulationSummary,
   RunnerProfile,
   SegmentSimulation,
   StrategyGroupingMode,
-  SweatSodiumCategory,
 } from "@/lib/race-engine/types";
 
 interface Step3StrategyTabProps {
@@ -82,7 +78,6 @@ export function Step3StrategyTab({
   onCopyWhatsApp,
   copiedWa,
 }: Step3StrategyTabProps) {
-  const [showAdvancedFuel, setShowAdvancedFuel] = useState(false);
   const [weightDraft, setWeightDraft] = useState(String(profile.weightKg));
 
   useEffect(() => {
@@ -119,7 +114,7 @@ export function Step3StrategyTab({
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
-        {/* 1. TOP CARD: KEBUTUHAN NUTRISI STANDAR + Inline Weight Stepper (per Section 1.pdf) */}
+        {/* 1. TOP CARD: KEBUTUHAN NUTRISI STANDAR + Inline Weight Stepper */}
         <section
           aria-labelledby="heading-fueling-summary"
           className="rounded-xl border border-[#E2E5E2] bg-[#F5F5F3] p-3.5"
@@ -131,19 +126,6 @@ export function Step3StrategyTab({
             >
               Kebutuhan Nutrisi Standar
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedFuel((v) => !v)}
-              aria-expanded={showAdvancedFuel}
-              className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-[#8C948E] bg-white px-2.5 text-[11px] font-semibold text-[#161E19] hover:bg-[#ECEFED]"
-            >
-              <IconSliders size={13} />
-              Sesuaikan
-              <IconChevronDown
-                size={13}
-                className={`transition-transform ${showAdvancedFuel ? "rotate-180" : ""}`}
-              />
-            </button>
           </div>
 
           {/* Inline Weight Stepper */}
@@ -288,70 +270,6 @@ export function Step3StrategyTab({
               </span>
             )}
           </div>
-
-          {showAdvancedFuel && (
-            <div className="mt-3 space-y-2.5 border-t border-[#E2E5E2] pt-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label
-                    htmlFor="tuner-gut"
-                    className="block text-[11px] font-semibold text-[#161E19]"
-                  >
-                    Toleransi perut
-                  </label>
-                  <select
-                    id="tuner-gut"
-                    value={profile.gutTolerance}
-                    onChange={(e) =>
-                      onUpdateProfile({ gutTolerance: e.target.value as GutTolerance })
-                    }
-                    className="mt-1 min-h-[38px] w-full rounded-md border border-[#8C948E] bg-white px-2 text-xs text-[#161E19]"
-                  >
-                    <option value="beginner">Pemula (ringan)</option>
-                    <option value="moderate">Standar (umum)</option>
-                    <option value="trained">Terlatih (tinggi)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="tuner-sodium"
-                    className="block text-[11px] font-semibold text-[#161E19]"
-                  >
-                    Laju keringat & garam
-                  </label>
-                  <select
-                    id="tuner-sodium"
-                    value={profile.sweatSodiumCategory}
-                    onChange={(e) =>
-                      onUpdateProfile({
-                        sweatSodiumCategory: e.target.value as SweatSodiumCategory,
-                      })
-                    }
-                    className="mt-1 min-h-[38px] w-full rounded-md border border-[#8C948E] bg-white px-2 text-xs text-[#161E19]"
-                  >
-                    <option value="low">Rendah (500 mg/L)</option>
-                    <option value="moderate">Sedang (750 mg/L)</option>
-                    <option value="high">Tinggi / Asin (1000 mg/L)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-[#161E19]">
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={profile.caffeineStrategy}
-                    onChange={(e) =>
-                      onUpdateProfile({ caffeineStrategy: e.target.checked })
-                    }
-                    className="h-4 w-4 accent-[#1E6B3A]"
-                  />
-                  Tambahkan kafein paruh akhir
-                </label>
-              </div>
-            </div>
-          )}
         </section>
 
         {/* 2. MIDDLE CARD: PACING STRATEGY + SINGLE DYNAMIC IF-ELSE COT BANNER */}

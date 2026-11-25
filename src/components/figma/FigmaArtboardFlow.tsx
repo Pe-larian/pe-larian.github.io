@@ -390,6 +390,7 @@ export function FigmaArtboardFlow() {
                 totalGainM={trailTotals.gainM}
                 uploadError={null}
                 onUpdateMetadata={noop}
+                onSwitchDiscipline={noop}
                 onChangeWeightKg={noop}
                 onUploadGpxFile={noop}
                 onLoadSampleRoute={noop}
@@ -405,14 +406,14 @@ export function FigmaArtboardFlow() {
             02 · Step 2: Konfirmasi Rute & Basis Strategi (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop expandedLayerMenu />
+            <StaticOsmMapBackdrop expandedLayerMenu showAddCpPill={false} />
             <DrawerShell step={2} widthClass="w-[440px]">
               <Step2ConfirmDrawer
                 metadata={trailMeta}
                 points={trailSample.points}
                 systemCheckpoints={trailSystemCps}
                 customCheckpoints={trailSample.checkpoints}
-                strategyGrouping="segments"
+                strategyGrouping="checkpoints"
                 onChangeStrategyGrouping={noop}
                 totalDistanceKm={trailDistanceKm}
                 totalGainM={trailTotals.gainM}
@@ -424,9 +425,8 @@ export function FigmaArtboardFlow() {
                 onUpdateSystemCheckpoint={noop}
                 onUpdateCustomCheckpoint={noop}
                 onDeleteCustomCheckpoint={noop}
-                onAddCheckpointMidpoint={noop}
-                addCpMode={false}
-                onToggleAddCpMode={noop}
+                onAddCheckpointByKm={noop}
+                onOpenFullscreenMapPicker={noop}
                 onBackStep={noop}
                 onGenerateStrategy={noop}
               />
@@ -440,7 +440,7 @@ export function FigmaArtboardFlow() {
             03 · Step 3 Tab 1: Overview Rute (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop />
+            <StaticOsmMapBackdrop showAddCpPill={false} />
             <DrawerShell step={3} tab="overview" widthClass="w-[460px]">
               <Step3OverviewTab
                 metadata={trailMeta}
@@ -471,7 +471,7 @@ export function FigmaArtboardFlow() {
             04 · Step 3 Tab 2: Pacing & Fueling Mode Road (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop />
+            <StaticOsmMapBackdrop showAddCpPill={false} />
             <DrawerShell step={3} tab="strategy" widthClass="w-[460px]">
               <Step3StrategyTab
                 discipline="road"
@@ -497,7 +497,7 @@ export function FigmaArtboardFlow() {
             05 · Step 3 Tab 2: Pacing & Fueling Mode Trail (1440 x 900)
           </p>
           <div className="relative h-[900px] w-[1440px] overflow-hidden rounded-2xl border border-[#CBD5E1] bg-white shadow-lg">
-            <StaticOsmMapBackdrop />
+            <StaticOsmMapBackdrop showAddCpPill={false} />
             <DrawerShell step={3} tab="strategy" widthClass="w-[460px]">
               <Step3StrategyTab
                 discipline="trail"
@@ -563,6 +563,7 @@ export function FigmaArtboardFlow() {
                 totalGainM={trailTotals.gainM}
                 uploadError={null}
                 onUpdateMetadata={noop}
+                onSwitchDiscipline={noop}
                 onChangeWeightKg={noop}
                 onUploadGpxFile={noop}
                 onLoadSampleRoute={noop}

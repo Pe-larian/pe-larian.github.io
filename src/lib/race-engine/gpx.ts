@@ -353,8 +353,6 @@ export function buildSystemSegmentsCheckpoints(
 ): Checkpoint[] {
   if (points.length < 2) return [];
   const totalDistM = points[points.length - 1].distFromStartM;
-  const segmentCount =
-    totalDistM >= 40000 ? 5 : totalDistM >= 15000 ? 4 : totalDistM >= 4500 ? 3 : 2;
 
   const startPt = points[0];
   const finishPt = points[points.length - 1];
@@ -374,23 +372,48 @@ export function buildSystemSegmentsCheckpoints(
     },
   ];
 
-  for (let k = 1; k < segmentCount; k++) {
-    const targetDist = (totalDistM / segmentCount) * k;
-    const ptIdx = findTrackPointIndexAtDistance(points, targetDist);
-    const pt = points[ptIdx];
-    nodes.push({
-      id: `sys-seg-${k}`,
-      name: `KM ${(pt.distFromStartM / 1000).toFixed(1)}`,
-      type: "aid",
-      distM: pt.distFromStartM,
-      pointIndex: ptIdx,
-      lat: pt.lat,
-      lon: pt.lon,
-      ele: Math.round(pt.ele),
-      plannedStopSec: discipline === "road" ? 30 : 240,
-      terrainAfter: discipline === "road" ? "road" : "singletrack",
-      services: discipline === "road" ? ["Air", "Isotonik"] : ["Air", "Isotonik", "Makanan"],
-    });
+  if (discipline === "road") {
+    const stepKmCount = Math.floor(totalDistM / 1000);
+    for (let km = 1; km <= stepKmCount; km++) {
+      const targetM = km * 1000;
+      if (totalDistM - targetM < 150) break;
+      const ptIdx = findTrackPointIndexAtDistance(points, targetM);
+      const pt = points[ptIdx];
+      nodes.push({
+        id: `sys-seg-${km}`,
+        name: `KM ${km}`,
+        type: "aid",
+        distM: pt.distFromStartM,
+        pointIndex: ptIdx,
+        lat: pt.lat,
+        lon: pt.lon,
+        ele: Math.round(pt.ele),
+        plannedStopSec: 0,
+        terrainAfter: "road",
+        services: ["Split 1 KM"],
+      });
+    }
+  } else {
+    const segmentCount =
+      totalDistM >= 40000 ? 5 : totalDistM >= 15000 ? 4 : totalDistM >= 4500 ? 3 : 2;
+    for (let k = 1; k < segmentCount; k++) {
+      const targetDist = (totalDistM / segmentCount) * k;
+      const ptIdx = findTrackPointIndexAtDistance(points, targetDist);
+      const pt = points[ptIdx];
+      nodes.push({
+        id: `sys-seg-${k}`,
+        name: `KM ${(pt.distFromStartM / 1000).toFixed(1)}`,
+        type: "aid",
+        distM: pt.distFromStartM,
+        pointIndex: ptIdx,
+        lat: pt.lat,
+        lon: pt.lon,
+        ele: Math.round(pt.ele),
+        plannedStopSec: 240,
+        terrainAfter: "singletrack",
+        services: ["Air", "Isotonik", "Makanan"],
+      });
+    }
   }
 
   nodes.push({
