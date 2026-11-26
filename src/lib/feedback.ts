@@ -1,7 +1,7 @@
 import type { RaceDiscipline } from "@/lib/race-engine/types";
 
 export const TRAKTEER_SUPPORT_URL = "https://trakteer.id/wmqa0yiq86fn1cfaulzf";
-export const FEEDBACK_TARGET_EMAIL = "pelari9q7@gmail.com";
+export const FEEDBACK_TARGET_EMAIL = "pelarian9q7@gmail.com";
 export const FORMSUBMIT_AJAX_ENDPOINT = `https://formsubmit.co/ajax/${FEEDBACK_TARGET_EMAIL}`;
 
 export type FeedbackCategory = "kritik" | "saran_fitur";

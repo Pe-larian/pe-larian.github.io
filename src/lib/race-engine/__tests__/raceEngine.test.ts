@@ -260,10 +260,10 @@ import {
 } from "../../feedback";
 
 describe("Support & feedback email payload builder", () => {
-  it("targets pelari9q7@gmail.com and uses the configured Trakteer direct link", () => {
-    expect(FEEDBACK_TARGET_EMAIL).toBe("pelari9q7@gmail.com");
+  it("targets pelarian9q7@gmail.com and uses the configured Trakteer direct link", () => {
+    expect(FEEDBACK_TARGET_EMAIL).toBe("pelarian9q7@gmail.com");
     expect(FORMSUBMIT_AJAX_ENDPOINT).toBe(
-      "https://formsubmit.co/ajax/pelari9q7@gmail.com"
+      "https://formsubmit.co/ajax/pelarian9q7@gmail.com"
     );
     expect(TRAKTEER_SUPPORT_URL).toBe("https://trakteer.id/wmqa0yiq86fn1cfaulzf");
     expect(getFeedbackCategoryLabel("kritik")).toBe("Kritik");
@@ -279,7 +279,7 @@ describe("Support & feedback email payload builder", () => {
       discipline: "trail",
     });
     expect(kritik.subject).toBe("[Pe-Larian] Kritik dari Andi");
-    expect(kritik.mailtoUrl).toContain("mailto:pelari9q7@gmail.com?");
+    expect(kritik.mailtoUrl).toContain("mailto:pelarian9q7@gmail.com?");
     expect(kritik.mailtoUrl).toContain("subject=%5BPe-Larian%5D%20Kritik");
     expect(kritik.formSubmitPayload.Kategori).toBe("Kritik");
     expect(kritik.formSubmitPayload.Pesan).toBe("Elevasi agak melonjak di KM 12");
