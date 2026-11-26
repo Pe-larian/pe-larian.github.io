@@ -111,13 +111,13 @@ export function SupportFeedbackModal({
 
       setSubmitState("success");
       setSubmitFeedbackMsg(
-        `Masukan (${emailPayload.categoryLabel}) terkirim ke ${FEEDBACK_TARGET_EMAIL}. Terima kasih sudah membantu Pe-Larian!`
+        `Masukan (${emailPayload.categoryLabel}) berhasil terkirim. Terima kasih sudah membantu mengembangkan Pe-Larian.`
       );
       setMessage("");
     } catch {
       setSubmitState("error");
       setSubmitFeedbackMsg(
-        `Pengiriman langsung sedang terkendala. Silakan klik "Buka Aplikasi Email" di bawah atau salin alamat ${FEEDBACK_TARGET_EMAIL}.`
+        `Pengiriman langsung sedang terkendala. Silakan klik "Buka Aplikasi Email" di bawah atau salin alamat email tujuan.`
       );
     }
   };
@@ -190,17 +190,12 @@ export function SupportFeedbackModal({
 
           {/* 2. Blok Kritik & Saran Fitur ke Email */}
           <section aria-labelledby="heading-feedback-form">
-            <div className="flex flex-wrap items-baseline justify-between gap-1">
-              <h3
-                id="heading-feedback-form"
-                className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
-              >
-                Kritik &amp; Saran Fitur
-              </h3>
-              <span className="font-num text-[11px] font-medium text-[#525C56]">
-                Sync ke {FEEDBACK_TARGET_EMAIL}
-              </span>
-            </div>
+            <h3
+              id="heading-feedback-form"
+              className="text-xs font-bold uppercase tracking-wide text-[#161E19]"
+            >
+              Kritik &amp; Saran Fitur
+            </h3>
 
             <form onSubmit={handleSubmit} className="mt-2 space-y-2.5" noValidate>
               {/* 2-Category Selector */}
@@ -332,7 +327,7 @@ export function SupportFeedbackModal({
               >
                 <IconMail size={16} />
                 {submitState === "submitting"
-                  ? "Mengirim ke pelari9q7@gmail.com..."
+                  ? "Mengirim masukan..."
                   : `Kirim ${emailPayload.categoryLabel}`}
               </button>
 
