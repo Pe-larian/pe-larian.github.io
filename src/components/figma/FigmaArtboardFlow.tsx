@@ -464,7 +464,6 @@ export function FigmaArtboardFlow() {
                 onUploadGpxFile={noop}
                 onExportGpx={noop}
                 onSwitchToStrategyTab={noop}
-                onOpenPrintModal={noop}
               />
             </DrawerShell>
           </div>
@@ -489,8 +488,7 @@ export function FigmaArtboardFlow() {
                 onUpdateProfile={noop}
                 onFocusSegment={noop}
                 onOpenPrintModal={noop}
-                onCopyWhatsApp={noop}
-                copiedWa={false}
+                onOpenSupportModal={noop}
               />
             </DrawerShell>
           </div>
@@ -515,8 +513,7 @@ export function FigmaArtboardFlow() {
                 onUpdateProfile={noop}
                 onFocusSegment={noop}
                 onOpenPrintModal={noop}
-                onCopyWhatsApp={noop}
-                copiedWa={false}
+                onOpenSupportModal={noop}
               />
             </DrawerShell>
           </div>
@@ -684,7 +681,6 @@ export function FigmaArtboardFlow() {
                   onUploadGpxFile={noop}
                   onExportGpx={noop}
                   onSwitchToStrategyTab={noop}
-                  onOpenPrintModal={noop}
                 />
               </div>
             </div>

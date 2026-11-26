@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrandMarkPeLarian, IconArrowLeft } from "@/components/Icons";
 import { RouteMapCanvas } from "@/components/map/RouteMapCanvas";
 import { PrintCardModal } from "@/components/print/PrintCardModal";
+import { SupportFeedbackModal } from "@/components/support/SupportFeedbackModal";
 import { Step1SetupDrawer } from "@/components/steps/Step1SetupDrawer";
 import {
   type AddCheckpointPayload,
@@ -134,6 +135,7 @@ export function RacePlannerApp() {
   });
 
   const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
   const [copiedWa, setCopiedWa] = useState(false);
 
   const totals = useMemo(() => computeElevationTotals(points), [points]);
@@ -384,14 +386,14 @@ export function RacePlannerApp() {
   useEffect(() => {
     if (!mobileFullMap && !addCpMode) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !printModalOpen) {
+      if (e.key === "Escape" && !printModalOpen && !supportModalOpen) {
         if (addCpMode) setAddCpMode(false);
         else if (mobileFullMap) setMobileFullMap(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mobileFullMap, addCpMode, printModalOpen]);
+  }, [mobileFullMap, addCpMode, printModalOpen, supportModalOpen]);
 
   // Mobile hides the map on Steps 1 & 2 (except fullscreen Add-CP mode triggered via "Klik di Peta").
   // On Mobile Step 3, map becomes a slim 64px peek strip so the data drawer gets ~92% of the viewport.
@@ -626,7 +628,6 @@ export function RacePlannerApp() {
               onUploadGpxFile={handleUploadGpxFile}
               onExportGpx={handleExportGpx}
               onSwitchToStrategyTab={() => setStep3Tab("strategy")}
-              onOpenPrintModal={() => setPrintModalOpen(true)}
             />
           )}
 
@@ -642,8 +643,7 @@ export function RacePlannerApp() {
               onUpdateProfile={(patch) => setProfile((prev) => ({ ...prev, ...patch }))}
               onFocusSegment={setFocusedSegmentIndex}
               onOpenPrintModal={() => setPrintModalOpen(true)}
-              onCopyWhatsApp={handleCopyWhatsApp}
-              copiedWa={copiedWa}
+              onOpenSupportModal={() => setSupportModalOpen(true)}
             />
           )}
         </div>
@@ -656,6 +656,13 @@ export function RacePlannerApp() {
         simulation={simulation}
         onCopyWhatsApp={handleCopyWhatsApp}
         copiedWa={copiedWa}
+      />
+
+      <SupportFeedbackModal
+        open={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        raceName={metadata.raceName}
+        discipline={metadata.discipline}
       />
     </main>
   );
