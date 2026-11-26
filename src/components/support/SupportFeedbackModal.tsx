@@ -5,13 +5,11 @@ import {
   IconAlert,
   IconCheck,
   IconClose,
-  IconCopy,
   IconHeart,
   IconMail,
 } from "@/components/Icons";
 import {
   buildFeedbackEmailPayload,
-  FEEDBACK_TARGET_EMAIL,
   FORMSUBMIT_AJAX_ENDPOINT,
   TRAKTEER_SUPPORT_URL,
   type FeedbackCategory,
@@ -39,7 +37,6 @@ export function SupportFeedbackModal({
     "idle" | "submitting" | "success" | "error"
   >("idle");
   const [submitFeedbackMsg, setSubmitFeedbackMsg] = useState<string | null>(null);
-  const [copiedEmail, setCopiedEmail] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -63,23 +60,6 @@ export function SupportFeedbackModal({
   );
 
   if (!open) return null;
-
-  const handleCopyEmail = async () => {
-    try {
-      await navigator.clipboard.writeText(FEEDBACK_TARGET_EMAIL);
-      setCopiedEmail(true);
-      setTimeout(() => setCopiedEmail(false), 2200);
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = FEEDBACK_TARGET_EMAIL;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      ta.remove();
-      setCopiedEmail(true);
-      setTimeout(() => setCopiedEmail(false), 2200);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,7 +97,7 @@ export function SupportFeedbackModal({
     } catch {
       setSubmitState("error");
       setSubmitFeedbackMsg(
-        `Pengiriman langsung sedang terkendala. Silakan klik "Buka Aplikasi Email" di bawah atau salin alamat email tujuan.`
+        "Pengiriman sedang terkendala. Pastikan koneksi internet aktif lalu coba kirim ulang."
       );
     }
   };
@@ -330,24 +310,6 @@ export function SupportFeedbackModal({
                   ? "Mengirim masukan..."
                   : `Kirim ${emailPayload.categoryLabel}`}
               </button>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <a
-                  href={emailPayload.mailtoUrl}
-                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[#E2E5E2] bg-[#F5F5F3] px-3 text-xs font-semibold text-[#161E19] hover:bg-[#ECEFED]"
-                >
-                  <IconMail size={14} />
-                  Buka Aplikasi Email
-                </a>
-                <button
-                  type="button"
-                  onClick={handleCopyEmail}
-                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-[#E2E5E2] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
-                >
-                  {copiedEmail ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                  {copiedEmail ? "Email Tersalin" : "Salin Email"}
-                </button>
-              </div>
             </form>
           </section>
         </div>
