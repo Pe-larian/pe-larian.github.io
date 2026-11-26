@@ -5,7 +5,7 @@ import { RoadPaceStrategyChart } from "@/components/chart/RoadPaceStrategyChart"
 import {
   IconAlert,
   IconCheck,
-  IconCopy,
+  IconHeart,
   IconMinus,
   IconPlus,
   IconPrint,
@@ -30,8 +30,7 @@ interface Step3StrategyTabProps {
   onUpdateProfile: (patch: Partial<RunnerProfile>) => void;
   onFocusSegment: (segIdx: number) => void;
   onOpenPrintModal: () => void;
-  onCopyWhatsApp: () => void;
-  copiedWa: boolean;
+  onOpenSupportModal: () => void;
 }
 
 function cutoffBadge(seg: SegmentSimulation) {
@@ -75,8 +74,7 @@ export function Step3StrategyTab({
   onUpdateProfile,
   onFocusSegment,
   onOpenPrintModal,
-  onCopyWhatsApp,
-  copiedWa,
+  onOpenSupportModal,
 }: Step3StrategyTabProps) {
   const [weightDraft, setWeightDraft] = useState(String(profile.weightKg));
 
@@ -537,23 +535,19 @@ export function Step3StrategyTab({
       <div className="flex items-center gap-2 border-t border-[#E2E5E2] bg-white px-5 py-3.5">
         <button
           type="button"
-          onClick={onOpenPrintModal}
-          className="inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#1B2B22] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#161E19]"
+          onClick={onOpenSupportModal}
+          className="inline-flex min-h-[46px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] transition-colors hover:bg-[#F5F5F3]"
         >
-          <IconPrint size={16} />
-          Print CP Card / Wristband
+          <IconHeart size={15} />
+          Dukung &amp; Masukan
         </button>
         <button
           type="button"
-          onClick={onCopyWhatsApp}
-          className={`inline-flex min-h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors ${
-            copiedWa
-              ? "border-[#146342] bg-[#EAF6F0] text-[#146342]"
-              : "border-[#8C948E] bg-white text-[#161E19] hover:bg-[#F5F5F3]"
-          }`}
+          onClick={onOpenPrintModal}
+          className="inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#1B2B22] px-3 text-center text-xs font-semibold text-white transition-colors hover:bg-[#161E19] sm:text-sm"
         >
-          {copiedWa ? <IconCheck size={15} /> : <IconCopy size={15} />}
-          {copiedWa ? "Tersalin" : "Copy WA"}
+          <IconPrint size={16} className="shrink-0" />
+          <span className="truncate">Print CP Card / Wristband</span>
         </button>
       </div>
     </div>

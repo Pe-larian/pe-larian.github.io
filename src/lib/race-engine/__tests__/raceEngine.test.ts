@@ -250,3 +250,47 @@ describe("Timezone auto-detection & static Open-Meteo adapter", () => {
     expect(missedSim.finalCutoffBufferSec).toBeLessThan(0);
   });
 });
+
+import {
+  buildFeedbackEmailPayload,
+  FEEDBACK_TARGET_EMAIL,
+  FORMSUBMIT_AJAX_ENDPOINT,
+  getFeedbackCategoryLabel,
+  TRAKTEER_SUPPORT_URL,
+} from "../../feedback";
+
+describe("Support & feedback email payload builder", () => {
+  it("targets pelari9q7@gmail.com and uses the configured Trakteer direct link", () => {
+    expect(FEEDBACK_TARGET_EMAIL).toBe("pelari9q7@gmail.com");
+    expect(FORMSUBMIT_AJAX_ENDPOINT).toBe(
+      "https://formsubmit.co/ajax/pelari9q7@gmail.com"
+    );
+    expect(TRAKTEER_SUPPORT_URL).toBe("https://trakteer.id/wmqa0yiq86fn1cfaulzf");
+    expect(getFeedbackCategoryLabel("kritik")).toBe("Kritik");
+    expect(getFeedbackCategoryLabel("saran_fitur")).toBe("Saran Fitur");
+  });
+
+  it("builds mailto URL and FormSubmit payload for Kritik and Saran Fitur", () => {
+    const kritik = buildFeedbackEmailPayload({
+      category: "kritik",
+      senderName: "Andi",
+      message: "Elevasi agak melonjak di KM 12",
+      raceName: "Rinjani 60K",
+      discipline: "trail",
+    });
+    expect(kritik.subject).toBe("[Pe-Larian] Kritik dari Andi");
+    expect(kritik.mailtoUrl).toContain("mailto:pelari9q7@gmail.com?");
+    expect(kritik.mailtoUrl).toContain("subject=%5BPe-Larian%5D%20Kritik");
+    expect(kritik.formSubmitPayload.Kategori).toBe("Kritik");
+    expect(kritik.formSubmitPayload.Pesan).toBe("Elevasi agak melonjak di KM 12");
+
+    const saran = buildFeedbackEmailPayload({
+      category: "saran_fitur",
+      message: "Tambahkan ekspor PDF jadwal minum",
+      discipline: "road",
+    });
+    expect(saran.subject).toBe("[Pe-Larian] Saran Fitur dari Pelari (Anonim)");
+    expect(saran.formSubmitPayload.Kategori).toBe("Saran Fitur");
+    expect(saran.formSubmitPayload.Konteks_Rute).toBe("Road");
+  });
+});

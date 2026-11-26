@@ -207,6 +207,23 @@ export function IconChevronDown({ size = 16, ...props }: IconProps) {
   );
 }
 
+export function IconHeart({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...baseProps(size, props)}>
+      <path d="M12 20.5s-7-4.5-8.8-9.2C2 8.2 4.1 5 7.4 5c1.9 0 3.6 1 4.6 2.5C13 6 14.7 5 16.6 5c3.3 0 5.4 3.2 4.2 6.3C19 16 12 20.5 12 20.5z" />
+    </svg>
+  );
+}
+
+export function IconMail({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...baseProps(size, props)}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3.5 6.5L12 13l8.5-6.5" />
+    </svg>
+  );
+}
+
 export function BrandMarkPeLarian({ size = 24, ...props }: IconProps) {
   return (
     <svg

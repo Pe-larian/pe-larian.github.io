@@ -6,7 +6,6 @@ import {
   IconArrowRight,
   IconCloudRain,
   IconDownload,
-  IconPrint,
   IconSun,
   IconUpload,
 } from "@/components/Icons";
@@ -37,7 +36,6 @@ interface Step3OverviewTabProps {
   onUploadGpxFile: (file: File) => void;
   onExportGpx: () => void;
   onSwitchToStrategyTab: () => void;
-  onOpenPrintModal: () => void;
 }
 
 export function Step3OverviewTab({
@@ -57,7 +55,6 @@ export function Step3OverviewTab({
   onUploadGpxFile,
   onExportGpx,
   onSwitchToStrategyTab,
-  onOpenPrintModal,
 }: Step3OverviewTabProps) {
   const reuploadRef = useRef<HTMLInputElement | null>(null);
 
@@ -372,17 +369,8 @@ export function Step3OverviewTab({
           onClick={onSwitchToStrategyTab}
           className="inline-flex min-h-[46px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#1B2B22] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#161E19]"
         >
-          Strategi Pacing & Fueling
+          Strategi Pacing &amp; Fueling
           <IconArrowRight size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={onOpenPrintModal}
-          aria-label="Buka modal Print CP Card"
-          className="inline-flex min-h-[46px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#8C948E] bg-white px-3 text-xs font-semibold text-[#161E19] hover:bg-[#F5F5F3]"
-        >
-          <IconPrint size={16} />
-          Print
         </button>
       </div>
     </div>
